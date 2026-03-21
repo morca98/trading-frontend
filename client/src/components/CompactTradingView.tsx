@@ -21,8 +21,8 @@ const TIMEFRAMES: { label: string; value: Timeframe }[] = [
 
 export default function CompactTradingView({ symbol, candles }: CompactTradingViewProps) {
   const chartContainerRef = useRef<HTMLDivElement>(null);
-  const rsiContainerRef = useRef<HTMLDivElement>(null);
-  const macdContainerRef = useRef<HTMLDivElement>(null);
+  const rsiCanvasRef = useRef<HTMLCanvasElement>(null);
+  const macdCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const [timeframe, setTimeframe] = useState<Timeframe>('30m');
   const [price, setPrice] = useState(0);
@@ -63,7 +63,6 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
         autoScale: true,
         borderColor: '#334155',
       },
-
       grid: {
         horzLines: {
           color: '#1e293b',
@@ -91,7 +90,7 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
 
     // Preparar dados
     const candleData = aggregatedCandles.map((c) => ({
-      time: Math.floor(c.time / 1000),
+      time: Math.floor(c.time / 1000) as any,
       open: c.open,
       high: c.high,
       low: c.low,
@@ -99,7 +98,7 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
     }));
 
     const volumeData = aggregatedCandles.map((c) => ({
-      time: Math.floor(c.time / 1000),
+      time: Math.floor(c.time / 1000) as any,
       value: c.volume,
       color: c.close >= c.open ? 'rgba(16, 185, 129, 0.4)' : 'rgba(239, 68, 68, 0.4)',
     }));
@@ -112,11 +111,6 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
       borderDownColor: '#dc2626',
       wickUpColor: '#10b981',
       wickDownColor: '#ef4444',
-      priceFormat: {
-        type: 'price',
-        precision: 2,
-        minMove: 0.01,
-      },
     });
 
     candleSeries.setData(candleData);
@@ -124,9 +118,6 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
     // Série de volume
     const volumeSeries = (chart as any).addHistogramSeries({
       color: '#3b82f6',
-      priceFormat: {
-        type: 'volume',
-      },
       priceScaleId: 'volume',
     });
 
@@ -144,18 +135,13 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
     if (showEMA20) {
       const ema20 = calculateEMA(aggregatedCandles, 20);
       const ema20Data = ema20.map((value, idx) => ({
-        time: Math.floor(aggregatedCandles[idx + aggregatedCandles.length - ema20.length].time / 1000),
+        time: Math.floor(aggregatedCandles[idx + aggregatedCandles.length - ema20.length].time / 1000) as any,
         value,
       }));
 
       const ema20Series = (chart as any).addLineSeries({
         color: '#3b82f6',
         lineWidth: 2,
-        priceFormat: {
-          type: 'price',
-          precision: 2,
-          minMove: 0.01,
-        },
       });
 
       ema20Series.setData(ema20Data);
@@ -165,18 +151,13 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
     if (showEMA50) {
       const ema50 = calculateEMA(aggregatedCandles, 50);
       const ema50Data = ema50.map((value, idx) => ({
-        time: Math.floor(aggregatedCandles[idx + aggregatedCandles.length - ema50.length].time / 1000),
+        time: Math.floor(aggregatedCandles[idx + aggregatedCandles.length - ema50.length].time / 1000) as any,
         value,
       }));
 
       const ema50Series = (chart as any).addLineSeries({
         color: '#f59e0b',
         lineWidth: 2,
-        priceFormat: {
-          type: 'price',
-          precision: 2,
-          minMove: 0.01,
-        },
       });
 
       ema50Series.setData(ema50Data);
@@ -203,16 +184,14 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
 
   // Desenhar RSI
   useEffect(() => {
-    if (!rsiContainerRef.current || candles.length === 0) return;
+    if (!rsiCanvasRef.current || candles.length === 0) return;
 
     const aggregatedCandles = aggregateCandles(candles, timeframe);
     const rsi = calculateRSI(aggregatedCandles, 14);
 
-    const canvas = document.createElement('canvas');
-    canvas.width = rsiContainerRef.current.clientWidth;
+    const canvas = rsiCanvasRef.current;
+    canvas.width = canvas.offsetWidth;
     canvas.height = 100;
-    rsiContainerRef.current.innerHTML = '';
-    rsiContainerRef.current.appendChild(canvas);
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -262,16 +241,14 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
 
   // Desenhar MACD
   useEffect(() => {
-    if (!macdContainerRef.current || candles.length === 0) return;
+    if (!macdCanvasRef.current || candles.length === 0) return;
 
     const aggregatedCandles = aggregateCandles(candles, timeframe);
     const { macdLine, signalLine, histogram } = calculateMACD(aggregatedCandles);
 
-    const canvas = document.createElement('canvas');
-    canvas.width = macdContainerRef.current.clientWidth;
+    const canvas = macdCanvasRef.current;
+    canvas.width = canvas.offsetWidth;
     canvas.height = 100;
-    macdContainerRef.current.innerHTML = '';
-    macdContainerRef.current.appendChild(canvas);
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -406,8 +383,8 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
       <div className="border-t border-slate-700 bg-slate-800/50">
         <div className="px-4 py-2">
           <p className="text-xs text-slate-400 font-semibold mb-1">RSI (14)</p>
-          <div
-            ref={rsiContainerRef}
+          <canvas
+            ref={rsiCanvasRef}
             className="w-full"
             style={{ height: '100px' }}
           />
@@ -418,8 +395,8 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
       <div className="border-t border-slate-700 bg-slate-800/50">
         <div className="px-4 py-2">
           <p className="text-xs text-slate-400 font-semibold mb-1">MACD (12,26,9)</p>
-          <div
-            ref={macdContainerRef}
+          <canvas
+            ref={macdCanvasRef}
             className="w-full"
             style={{ height: '100px' }}
           />
