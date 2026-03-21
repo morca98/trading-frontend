@@ -3,11 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart } from 'recharts';
-import { TrendingUp, TrendingDown, Bell, History, Settings, Zap, Menu, X } from 'lucide-react';
+import { TrendingUp, TrendingDown, Bell, History, Settings, Zap, Menu, X, BarChart3 } from 'lucide-react';
 import SignalCard from './SignalCard';
 import TradeHistory from './TradeHistory';
 import ParameterOptimizer from './ParameterOptimizer';
 import AlertsPanel from './AlertsPanel';
+import PerformanceDashboard from './PerformanceDashboard';
+import InteractiveBacktest from './InteractiveBacktest';
 
 const BACKEND_URL = 'https://trading-backend-production-5dd4.up.railway.app';
 
@@ -38,6 +40,7 @@ export default function MainLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('signal');
   const [trades, setTrades] = useState<any[]>([]);
+  const [backtestResult, setBacktestResult] = useState<any>(null);
 
   const symbols = [
     { label: 'BTC/USDT', value: 'BTCUSDT' },
@@ -99,6 +102,7 @@ export default function MainLayout() {
       const data = await res.json();
       if (data.success && data.trades) {
         setTrades(data.trades);
+        setBacktestResult(data);
       }
     } catch (err) {
       console.error('Erro ao carregar trades:', err);
@@ -130,6 +134,9 @@ export default function MainLayout() {
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" className="text-slate-300 hover:bg-slate-700">
               <Bell className="w-5 h-5" />
+            </Button>
+            <Button variant="ghost" size="sm" className="text-slate-300 hover:bg-slate-700">
+              <BarChart3 className="w-5 h-5" />
             </Button>
             <Button variant="ghost" size="sm" className="text-slate-300 hover:bg-slate-700">
               <Settings className="w-5 h-5" />
@@ -246,10 +253,21 @@ export default function MainLayout() {
             </Card>
           </div>
 
+          {/* Performance Dashboard */}
+          {backtestResult && activeTab === 'performance' && (
+            <div className="border-t border-slate-700 bg-slate-800 p-6 max-h-96 overflow-y-auto">
+              <PerformanceDashboard
+                backtestResult={backtestResult}
+                loading={loading}
+                onRunBacktest={loadTrades}
+              />
+            </div>
+          )}
+
           {/* Bottom Tabs */}
           <div className="border-t border-slate-700 bg-slate-800 p-6">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-4 bg-slate-700 border-slate-600">
+              <TabsList className="grid w-full grid-cols-5 bg-slate-700 border-slate-600">
                 <TabsTrigger value="signal" className="text-slate-300 data-[state=active]:text-white data-[state=active]:bg-slate-600">
                   <Zap className="w-4 h-4 mr-2" />
                   Sinal
@@ -265,6 +283,10 @@ export default function MainLayout() {
                 <TabsTrigger value="optimize" className="text-slate-300 data-[state=active]:text-white data-[state=active]:bg-slate-600">
                   <Settings className="w-4 h-4 mr-2" />
                   Otimizar
+                </TabsTrigger>
+                <TabsTrigger value="performance" className="text-slate-300 data-[state=active]:text-white data-[state=active]:bg-slate-600">
+                  <TrendingUp className="w-4 h-4 mr-2" />
+                  Performance
                 </TabsTrigger>
               </TabsList>
 
@@ -303,7 +325,11 @@ export default function MainLayout() {
                 </TabsContent>
 
                 <TabsContent value="optimize">
-                  <ParameterOptimizer symbol={activeSymbol} onOptimize={loadSignal} />
+                  <InteractiveBacktest symbol={activeSymbol} onBacktestComplete={setBacktestResult} />
+                </TabsContent>
+
+                <TabsContent value="performance">
+                  <p className="text-slate-400 text-center py-4">Ver painel completo acima</p>
                 </TabsContent>
               </div>
             </Tabs>
