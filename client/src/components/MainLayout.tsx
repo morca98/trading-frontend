@@ -13,6 +13,7 @@ import InteractiveBacktest from './InteractiveBacktest';
 import AdvancedCandleChart from './AdvancedCandleChart';
 import TradingViewChart from './TradingViewChart';
 import CompactTradingView from './CompactTradingView';
+import AdvancedSignalsPanel from './AdvancedSignalsPanel';
 
 const BACKEND_URL = 'https://trading-backend-production-5dd4.up.railway.app';
 
@@ -197,6 +198,9 @@ export default function MainLayout() {
 
             {/* Signal Card */}
             {signal && <SignalCard signal={signal} />}
+
+            {/* Advanced Signals Panel */}
+            <AdvancedSignalsPanel symbol={activeSymbol} candles={candles} />
 
             {/* Quick Stats */}
             <div className="bg-slate-700 p-4 rounded-lg space-y-2">
