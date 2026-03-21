@@ -10,6 +10,7 @@ import ParameterOptimizer from './ParameterOptimizer';
 import AlertsPanel from './AlertsPanel';
 import PerformanceDashboard from './PerformanceDashboard';
 import InteractiveBacktest from './InteractiveBacktest';
+import AdvancedCandleChart from './AdvancedCandleChart';
 
 const BACKEND_URL = 'https://trading-backend-production-5dd4.up.railway.app';
 
@@ -220,37 +221,7 @@ export default function MainLayout() {
         <div className="flex-1 overflow-hidden flex flex-col">
           {/* Chart Area */}
           <div className="flex-1 p-6 overflow-y-auto">
-            <Card className="bg-slate-800 border-slate-700 h-full flex flex-col">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-white">Gráfico de Preço (30M)</CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1 flex flex-col">
-                {chartData.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={chartData}>
-                      <defs>
-                        <linearGradient id="colorClose" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#475569" />
-                      <XAxis dataKey="time" stroke="#94a3b8" tick={{ fontSize: 12 }} />
-                      <YAxis stroke="#94a3b8" />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569', borderRadius: '8px' }}
-                        formatter={(value: any) => typeof value === 'number' ? value.toFixed(2) : value}
-                      />
-                      <Area type="monotone" dataKey="close" stroke="#3b82f6" fillOpacity={1} fill="url(#colorClose)" />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="flex items-center justify-center h-full">
-                    <p className="text-slate-400">A carregar gráfico...</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <AdvancedCandleChart symbol={activeSymbol} candles={candles} />
           </div>
 
           {/* Performance Dashboard */}
