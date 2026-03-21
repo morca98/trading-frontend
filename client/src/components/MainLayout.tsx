@@ -11,6 +11,7 @@ import AlertsPanel from './AlertsPanel';
 import PerformanceDashboard from './PerformanceDashboard';
 import InteractiveBacktest from './InteractiveBacktest';
 import AdvancedCandleChart from './AdvancedCandleChart';
+import TradingViewChart from './TradingViewChart';
 
 const BACKEND_URL = 'https://trading-backend-production-5dd4.up.railway.app';
 
@@ -221,7 +222,7 @@ export default function MainLayout() {
         <div className="flex-1 overflow-hidden flex flex-col">
           {/* Chart Area */}
           <div className="flex-1 p-6 overflow-y-auto">
-            <AdvancedCandleChart symbol={activeSymbol} candles={candles} />
+            <TradingViewChart symbol={activeSymbol} candles={candles} />
           </div>
 
           {/* Performance Dashboard */}
