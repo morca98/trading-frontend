@@ -18,6 +18,7 @@ import LoadingProgress from './LoadingProgress';
 
 import { BACKEND_URL } from '@/const';
 import { getCoinbaseProCandlesExtended } from '@/lib/coinbaseProService';
+import { candleCache } from '@/lib/candleCache';
 
 interface Signal {
   signal: string;
@@ -55,15 +56,28 @@ export default function MainLayout() {
     { label: 'SOL/USDT', value: 'SOLUSDT' },
   ];
 
+  // Carregar dados históricos apenas quando muda o símbolo
   useEffect(() => {
-    loadSignal();
+    loadHistoricalData();
     loadPrice();
     loadTrades();
-    
-    const priceInterval = setInterval(() => {
-      loadPrice();
-    }, 10000);
+    loadSignal();
+  }, [activeSymbol]);
 
+  // Atualizar preço periodicamente
+  useEffect(() => {
+    const priceInterval = setInterval(loadPrice, 10000);
+    return () => clearInterval(priceInterval);
+  }, [activeSymbol]);
+
+  // Atualizar sinal periodicamente (sem recarregar 1 ano de dados)
+  useEffect(() => {
+    const signalInterval = setInterval(loadSignal, 30000);
+    return () => clearInterval(signalInterval);
+  }, [activeSymbol]);
+
+  // Verificar alertas
+  useEffect(() => {
     const checkAlerts = () => {
       const stored = localStorage.getItem(`alerts_${activeSymbol}`);
       if (stored && price > 0) {
@@ -92,32 +106,33 @@ export default function MainLayout() {
     };
 
     const alertInterval = setInterval(checkAlerts, 5000);
+    return () => clearInterval(alertInterval);
+  }, [activeSymbol, price]);
 
-    const signalInterval = setInterval(() => {
-      loadSignal();
-    }, 30000);
+  const loadHistoricalData = async () => {
+    // Verificar se já temos dados em cache
+    const cachedCandles = candleCache.get(activeSymbol);
+    if (cachedCandles && cachedCandles.length > 0) {
+      console.log(`✓ Usando ${cachedCandles.length} candles do cache.`);
+      setCandles([...cachedCandles]);
+      return;
+    }
 
-    return () => {
-      clearInterval(priceInterval);
-      clearInterval(signalInterval);
-      clearInterval(alertInterval);
-    };
-  }, [activeSymbol]);
-
-  const loadSignal = async () => {
+    // Se não há cache, carregar do Coinbase
     try {
       setLoading(true);
       setLoadProgress(0);
+
       const symbolMap: Record<string, string> = {
         'BTCUSDT': 'BTC/USDT',
         'ETHUSDT': 'ETH/USDT',
         'SOLUSDT': 'SOL/USDT',
       };
       const mappedSymbol = symbolMap[activeSymbol] || 'BTC/USDT';
-      
-      // 17520 candles = 1 ano em timeframe 30m (17520 * 30min = 525600 min = 365 dias)
+
+      // 17520 candles = 1 ano em timeframe 30m
       const fetchPromise = getCoinbaseProCandlesExtended(mappedSymbol, '30m', 17520, (p) => setLoadProgress(p));
-      const timeoutPromise = new Promise<any[]>((_, reject) => 
+      const timeoutPromise = new Promise<any[]>((_, reject) =>
         setTimeout(() => reject(new Error('Timeout ao carregar dados históricos')), 45000)
       );
 
@@ -127,34 +142,36 @@ export default function MainLayout() {
       } catch (err) {
         console.error('Erro ou timeout no fetch de candles:', err);
       }
-      
+
       if (candlesData && candlesData.length > 0) {
-        console.log(`Carregados ${candlesData.length} candles com sucesso.`);
-        setCandles([...candlesData]); // Forçar nova referência
-        
-        // Carregar sinal do backend
-        try {
-          const res = await fetch(`${BACKEND_URL}/api/signal?symbol=${activeSymbol}&interval=30m`);
-          const data = await res.json();
-          if (data.success) {
-            setSignal(data.signal || null);
-          }
-        } catch (err) {
-          console.error('Erro ao carregar sinal:', err);
-        }
+        console.log(`✓ Carregados ${candlesData.length} candles com sucesso.`);
+        setCandles([...candlesData]);
+        candleCache.set(activeSymbol, candlesData); // Guardar em cache
       } else {
         console.log('Nenhum dado do Coinbase, tentando backend...');
         const res = await fetch(`${BACKEND_URL}/api/signal?symbol=${activeSymbol}&interval=30m`);
         const data = await res.json();
-        if (data.success) {
-          setSignal(data.signal || null);
-          setCandles(data.candles || []);
+        if (data.success && data.candles) {
+          setCandles(data.candles);
+          candleCache.set(activeSymbol, data.candles);
         }
       }
     } catch (err) {
-      console.error('Erro ao carregar sinal:', err);
+      console.error('Erro ao carregar dados históricos:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadSignal = async () => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/signal?symbol=${activeSymbol}&interval=30m`);
+      const data = await res.json();
+      if (data.success) {
+        setSignal(data.signal || null);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar sinal:', err);
     }
   };
 
@@ -299,12 +316,14 @@ export default function MainLayout() {
 
         {/* Main Content */}
         <div className="flex-1 overflow-hidden flex flex-col bg-slate-900">
-          <LoadingProgress 
-            isLoading={loading} 
-            message="Carregando 1 ano de dados do Coinbase Pro..." 
-            externalProgress={loadProgress}
-          />
-          
+          {loading && (
+            <LoadingProgress
+              isLoading={loading}
+              message="Carregando 1 ano de dados do Coinbase Pro..."
+              externalProgress={loadProgress}
+            />
+          )}
+
           {/* Chart Area */}
           <div className="flex-1 overflow-hidden p-6">
             <OptimizedCandleChart symbol={activeSymbol} candles={candles} />
