@@ -1,20 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { TrendingUp, TrendingDown, Bell, History, Settings, Zap, Menu, X, BarChart3 } from 'lucide-react';
-import SignalCard from './SignalCard';
-import TradeHistory from './TradeHistory';
-import ParameterOptimizer from './ParameterOptimizer';
-import AlertsPanel from './AlertsPanel';
-import PerformanceDashboard from './PerformanceDashboard';
-import InteractiveBacktest from './InteractiveBacktest';
+import { TrendingUp, TrendingDown, Bell, Settings } from 'lucide-react';
 import OptimizedCandleChart from './OptimizedCandleChart';
-import TradingViewChart from './TradingViewChart';
-import CompactTradingView from './CompactTradingView';
-import AdvancedSignalsPanel from './AdvancedSignalsPanel';
-import LiquidationHeatmap from './LiquidationHeatmap';
 import LoadingProgress from './LoadingProgress';
+import SignalCard from './SignalCard';
+import AlertsPanel from './AlertsPanel';
 
 import { BACKEND_URL } from '@/const';
 import { getCoinbaseProCandlesExtended } from '@/lib/coinbaseProService';
@@ -44,11 +35,8 @@ export default function MainLayout() {
   const [price, setPrice] = useState(0);
   const [priceChange, setPriceChange] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState('signal');
-  const [trades, setTrades] = useState<any[]>([]);
-  const [backtestResult, setBacktestResult] = useState<any>(null);
   const [loadProgress, setLoadProgress] = useState(0);
+  const [showAlerts, setShowAlerts] = useState(false);
 
   const symbols = [
     { label: 'BTC/USDT', value: 'BTCUSDT' },
@@ -56,61 +44,27 @@ export default function MainLayout() {
     { label: 'SOL/USDT', value: 'SOLUSDT' },
   ];
 
-  // Carregar dados históricos apenas quando muda o símbolo
+  // Carregar dados históricos quando muda o símbolo
   useEffect(() => {
     loadHistoricalData();
+  }, [activeSymbol]);
+
+  // Atualizar preço e sinal periodicamente
+  useEffect(() => {
     loadPrice();
-    loadTrades();
     loadSignal();
-  }, [activeSymbol]);
 
-  // Atualizar preço periodicamente
-  useEffect(() => {
     const priceInterval = setInterval(loadPrice, 10000);
-    return () => clearInterval(priceInterval);
-  }, [activeSymbol]);
-
-  // Atualizar sinal periodicamente (sem recarregar 1 ano de dados)
-  useEffect(() => {
     const signalInterval = setInterval(loadSignal, 30000);
-    return () => clearInterval(signalInterval);
-  }, [activeSymbol]);
 
-  // Verificar alertas
-  useEffect(() => {
-    const checkAlerts = () => {
-      const stored = localStorage.getItem(`alerts_${activeSymbol}`);
-      if (stored && price > 0) {
-        const alerts = JSON.parse(stored);
-        alerts.forEach((alert: any) => {
-          if (alert.enabled) {
-            if (alert.type === 'above' && price >= alert.price) {
-              import('sonner').then(({ toast }) => {
-                toast.success(`Alerta: ${activeSymbol} subiu acima de $${alert.price}!`, {
-                  description: `Preço atual: $${price.toFixed(2)}`,
-                });
-              });
-              alert.enabled = false;
-            } else if (alert.type === 'below' && price <= alert.price) {
-              import('sonner').then(({ toast }) => {
-                toast.error(`Alerta: ${activeSymbol} caiu abaixo de $${alert.price}!`, {
-                  description: `Preço atual: $${price.toFixed(2)}`,
-                });
-              });
-              alert.enabled = false;
-            }
-          }
-        });
-        localStorage.setItem(`alerts_${activeSymbol}`, JSON.stringify(alerts));
-      }
+    return () => {
+      clearInterval(priceInterval);
+      clearInterval(signalInterval);
     };
-
-    const alertInterval = setInterval(checkAlerts, 5000);
-    return () => clearInterval(alertInterval);
-  }, [activeSymbol, price]);
+  }, [activeSymbol]);
 
   const loadHistoricalData = async () => {
-    // Verificar se já temos dados em cache
+    // Verificar cache
     const cachedCandles = candleCache.get(activeSymbol);
     if (cachedCandles && cachedCandles.length > 0) {
       console.log(`✓ Usando ${cachedCandles.length} candles do cache.`);
@@ -118,7 +72,7 @@ export default function MainLayout() {
       return;
     }
 
-    // Se não há cache, carregar do Coinbase
+    // Carregar do Coinbase
     try {
       setLoading(true);
       setLoadProgress(0);
@@ -130,34 +84,20 @@ export default function MainLayout() {
       };
       const mappedSymbol = symbolMap[activeSymbol] || 'BTC/USDT';
 
-      // 17520 candles = 1 ano em timeframe 30m
-      const fetchPromise = getCoinbaseProCandlesExtended(mappedSymbol, '30m', 17520, (p) => setLoadProgress(p));
-      const timeoutPromise = new Promise<any[]>((_, reject) =>
-        setTimeout(() => reject(new Error('Timeout ao carregar dados históricos')), 45000)
+      const candlesData = await getCoinbaseProCandlesExtended(
+        mappedSymbol,
+        '1d',
+        365,
+        (p) => setLoadProgress(p)
       );
 
-      let candlesData: any[] = [];
-      try {
-        candlesData = await Promise.race([fetchPromise, timeoutPromise]);
-      } catch (err) {
-        console.error('Erro ou timeout no fetch de candles:', err);
-      }
-
       if (candlesData && candlesData.length > 0) {
-        console.log(`✓ Carregados ${candlesData.length} candles com sucesso.`);
+        console.log(`✓ Carregados ${candlesData.length} candles.`);
         setCandles([...candlesData]);
-        candleCache.set(activeSymbol, candlesData); // Guardar em cache
-      } else {
-        console.log('Nenhum dado do Coinbase, tentando backend...');
-        const res = await fetch(`${BACKEND_URL}/api/signal?symbol=${activeSymbol}&interval=30m`);
-        const data = await res.json();
-        if (data.success && data.candles) {
-          setCandles(data.candles);
-          candleCache.set(activeSymbol, data.candles);
-        }
+        candleCache.set(activeSymbol, candlesData);
       }
     } catch (err) {
-      console.error('Erro ao carregar dados históricos:', err);
+      console.error('Erro ao carregar dados:', err);
     } finally {
       setLoading(false);
     }
@@ -165,7 +105,7 @@ export default function MainLayout() {
 
   const loadSignal = async () => {
     try {
-      const res = await fetch(`${BACKEND_URL}/api/signal?symbol=${activeSymbol}&interval=30m`);
+      const res = await fetch(`${BACKEND_URL}/api/signal?symbol=${activeSymbol}&interval=1d`);
       const data = await res.json();
       if (data.success) {
         setSignal(data.signal || null);
@@ -195,39 +135,20 @@ export default function MainLayout() {
     }
   };
 
-  const loadTrades = async () => {
-    try {
-      const res = await fetch(`${BACKEND_URL}/api/backtest?symbol=${activeSymbol}`);
-      const data = await res.json();
-      if (data.success && data.trades) {
-        setTrades(data.trades);
-        setBacktestResult(data);
-      }
-    } catch (err) {
-      console.error('Erro ao carregar trades:', err);
-    }
-  };
-
   return (
     <div className="w-full min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       {/* Header */}
       <div className="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
         <div className="px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-slate-700 rounded-lg transition"
-            >
-              {sidebarOpen ? <X className="w-5 h-5 text-white" /> : <Menu className="w-5 h-5 text-white" />}
-            </button>
-            <h1 className="text-2xl font-bold text-white">Crypto AI Agent</h1>
-          </div>
+          <h1 className="text-2xl font-bold text-white">Trading Dashboard</h1>
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="sm" className="text-slate-300 hover:bg-slate-700">
+            <Button
+              onClick={() => setShowAlerts(!showAlerts)}
+              variant="ghost"
+              size="sm"
+              className="text-slate-300 hover:bg-slate-700"
+            >
               <Bell className="w-5 h-5" />
-            </Button>
-            <Button variant="ghost" size="sm" className="text-slate-300 hover:bg-slate-700">
-              <BarChart3 className="w-5 h-5" />
             </Button>
             <Button variant="ghost" size="sm" className="text-slate-300 hover:bg-slate-700">
               <Settings className="w-5 h-5" />
@@ -238,39 +159,35 @@ export default function MainLayout() {
 
       <div className="flex h-[calc(100vh-70px)]">
         {/* Sidebar */}
-        <div
-          className={`${
-            sidebarOpen ? 'w-80' : 'w-0'
-          } bg-slate-800 border-r border-slate-700 overflow-hidden transition-all duration-300 flex flex-col`}
-        >
-          <div className="p-6 space-y-6 overflow-y-auto flex-1">
-            {/* Symbol Selector */}
-            <div>
-              <p className="text-slate-400 text-xs font-semibold mb-3 uppercase">Símbolos</p>
-              <div className="space-y-2">
-                {symbols.map((sym) => (
-                  <Button
-                    key={sym.value}
-                    onClick={() => setActiveSymbol(sym.value)}
-                    variant={activeSymbol === sym.value ? 'default' : 'outline'}
-                    className={`w-full justify-start ${
-                      activeSymbol === sym.value
-                        ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                        : 'border-slate-600 text-slate-300 hover:bg-slate-700'
-                    }`}
-                  >
-                    {sym.label}
-                  </Button>
-                ))}
-              </div>
+        <div className="w-80 bg-slate-800 border-r border-slate-700 p-6 overflow-y-auto space-y-6">
+          {/* Symbol Selector */}
+          <div>
+            <p className="text-slate-400 text-xs font-semibold mb-3 uppercase">Símbolos</p>
+            <div className="space-y-2">
+              {symbols.map((sym) => (
+                <Button
+                  key={sym.value}
+                  onClick={() => setActiveSymbol(sym.value)}
+                  variant={activeSymbol === sym.value ? 'default' : 'outline'}
+                  className={`w-full justify-start ${
+                    activeSymbol === sym.value
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                      : 'border-slate-600 text-slate-300 hover:bg-slate-700'
+                  }`}
+                >
+                  {sym.label}
+                </Button>
+              ))}
             </div>
+          </div>
 
-            {/* Price Info */}
-            <div className="bg-slate-700 p-4 rounded-lg">
+          {/* Price Info */}
+          <Card className="bg-slate-700 border-slate-600">
+            <CardContent className="pt-4">
               <p className="text-slate-400 text-xs mb-2">Preço Atual</p>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-2xl font-bold text-white">${price.toFixed(2)}</p>
+                  <p className="text-3xl font-bold text-white">${price.toFixed(2)}</p>
                   <p className={`text-sm font-semibold ${priceChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}%
                   </p>
@@ -281,134 +198,53 @@ export default function MainLayout() {
                   <TrendingDown className="w-8 h-8 text-red-400" />
                 )}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Signal Card */}
+          {signal && <SignalCard signal={signal} />}
+
+          {/* Alerts */}
+          {showAlerts && (
+            <div className="bg-slate-700 p-4 rounded-lg">
+              <p className="text-white font-semibold mb-3">Alertas</p>
+              <AlertsPanel symbol={activeSymbol} />
             </div>
+          )}
 
-            {/* Signal Card */}
-            {signal && <SignalCard signal={signal} />}
-
-            {/* Advanced Signals Panel */}
-            <details className="bg-slate-700 rounded-lg p-3">
-              <summary className="text-sm font-semibold text-white cursor-pointer hover:text-cyan-400">📊 Análise Avançada</summary>
-              <div className="mt-3 space-y-2 max-h-96 overflow-y-auto">
-                <AdvancedSignalsPanel symbol={activeSymbol} candles={candles} />
-              </div>
-            </details>
-
-            {/* Liquidation Heatmap */}
-            <LiquidationHeatmap symbol={activeSymbol} candles={candles} />
-
-            {/* Quick Stats */}
-            <div className="bg-slate-700 p-4 rounded-lg space-y-2">
-              <p className="text-slate-400 text-xs font-semibold mb-3 uppercase">Métricas</p>
-              <div className="flex justify-between">
-                <span className="text-slate-300 text-sm">RSI</span>
-                <span className="text-white font-bold">{signal?.rsi || '-'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-300 text-sm">Trend 4H</span>
-                <span className={`font-bold ${signal?.macroTrend === 'BULL' ? 'text-green-400' : 'text-red-400'}`}>
-                  {signal?.macroTrend || '-'}
-                </span>
-              </div>
+          {/* Info */}
+          <div className="bg-slate-700 p-4 rounded-lg space-y-2 text-sm">
+            <p className="text-slate-400 text-xs font-semibold mb-3 uppercase">Informações</p>
+            <div className="flex justify-between">
+              <span className="text-slate-300">RSI</span>
+              <span className="text-white font-bold">{signal?.rsi || '-'}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-300">Trend</span>
+              <span className={`font-bold ${signal?.macroTrend === 'BULL' ? 'text-green-400' : 'text-red-400'}`}>
+                {signal?.macroTrend || '-'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-300">Confiança</span>
+              <span className="text-blue-400 font-bold">{signal?.conf || '-'}%</span>
             </div>
           </div>
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 overflow-hidden flex flex-col bg-slate-900">
+        <div className="flex-1 overflow-hidden flex flex-col bg-slate-900 p-6">
           {loading && (
             <LoadingProgress
               isLoading={loading}
-              message="Carregando 1 ano de dados do Coinbase Pro..."
+              message="Carregando dados..."
               externalProgress={loadProgress}
             />
           )}
 
-          {/* Chart Area */}
-          <div className="flex-1 overflow-hidden p-6">
+          {/* Chart */}
+          <div className="flex-1 overflow-hidden">
             <OptimizedCandleChart symbol={activeSymbol} candles={candles} />
-          </div>
-
-          {/* Performance Dashboard */}
-          {backtestResult && activeTab === 'performance' && (
-            <div className="border-t border-slate-700 bg-slate-800 p-6 max-h-96 overflow-y-auto">
-              <PerformanceDashboard
-                backtestResult={backtestResult}
-                loading={loading}
-                onRunBacktest={loadTrades}
-              />
-            </div>
-          )}
-
-          {/* Bottom Tabs */}
-          <div className="border-t border-slate-700 bg-slate-800 p-6">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-5 bg-slate-700 border-slate-600">
-                <TabsTrigger value="signal" className="text-slate-300 data-[state=active]:text-white data-[state=active]:bg-slate-600">
-                  <Zap className="w-4 h-4 mr-2" />
-                  Sinal
-                </TabsTrigger>
-                <TabsTrigger value="history" className="text-slate-300 data-[state=active]:text-white data-[state=active]:bg-slate-600">
-                  <History className="w-4 h-4 mr-2" />
-                  Histórico
-                </TabsTrigger>
-                <TabsTrigger value="alerts" className="text-slate-300 data-[state=active]:text-white data-[state=active]:bg-slate-600">
-                  <Bell className="w-4 h-4 mr-2" />
-                  Alertas
-                </TabsTrigger>
-                <TabsTrigger value="optimize" className="text-slate-300 data-[state=active]:text-white data-[state=active]:bg-slate-600">
-                  <Settings className="w-4 h-4 mr-2" />
-                  Otimizar
-                </TabsTrigger>
-                <TabsTrigger value="performance" className="text-slate-300 data-[state=active]:text-white data-[state=active]:bg-slate-600">
-                  <TrendingUp className="w-4 h-4 mr-2" />
-                  Performance
-                </TabsTrigger>
-              </TabsList>
-
-              <div className="mt-4 max-h-80 overflow-y-auto">
-                <TabsContent value="signal" className="space-y-4">
-                  {signal ? (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-slate-700 p-4 rounded-lg">
-                        <p className="text-slate-400 text-xs mb-1">Entrada</p>
-                        <p className="text-white text-lg font-bold">${signal.price.toFixed(2)}</p>
-                      </div>
-                      <div className="bg-slate-700 p-4 rounded-lg">
-                        <p className="text-slate-400 text-xs mb-1">Stop Loss</p>
-                        <p className="text-red-400 text-lg font-bold">${signal.sl.toFixed(2)}</p>
-                      </div>
-                      <div className="bg-slate-700 p-4 rounded-lg">
-                        <p className="text-slate-400 text-xs mb-1">Take Profit</p>
-                        <p className="text-green-400 text-lg font-bold">${signal.tp.toFixed(2)}</p>
-                      </div>
-                      <div className="bg-slate-700 p-4 rounded-lg">
-                        <p className="text-slate-400 text-xs mb-1">Confiança</p>
-                        <p className="text-blue-400 text-lg font-bold">{signal.conf}%</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-slate-400 text-center py-4">Nenhum sinal disponível</p>
-                  )}
-                </TabsContent>
-
-                <TabsContent value="history">
-                  <TradeHistory trades={trades} symbol={activeSymbol} />
-                </TabsContent>
-
-                <TabsContent value="alerts">
-                  <AlertsPanel symbol={activeSymbol} />
-                </TabsContent>
-
-                <TabsContent value="optimize">
-                  <InteractiveBacktest symbol={activeSymbol} onBacktestComplete={setBacktestResult} />
-                </TabsContent>
-
-                <TabsContent value="performance">
-                  <p className="text-slate-400 text-center py-4">Ver painel completo acima</p>
-                </TabsContent>
-              </div>
-            </Tabs>
           </div>
         </div>
       </div>
