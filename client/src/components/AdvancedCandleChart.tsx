@@ -36,14 +36,21 @@ export default function AdvancedCandleChart({ symbol, candles }: AdvancedCandleC
   const chartPadding = 60;
 
   // Agregar candles baseado no timeframe
-  const aggregatedCandles = aggregateCandles(candles, timeframe);
+  const aggregatedCandles = React.useMemo(() => aggregateCandles(candles, timeframe), [candles, timeframe]);
 
   useEffect(() => {
-    drawMainChart();
+    // Pequeno delay para garantir que o canvas está pronto e as dimensões estão corretas
+    const timer = setTimeout(() => {
+      drawMainChart();
+    }, 50);
+    return () => clearTimeout(timer);
   }, [aggregatedCandles, zoomLevel, scrollOffset, hoveredCandle]);
 
   const drawMainChart = () => {
-    if (!canvasRef.current || aggregatedCandles.length === 0) return;
+    if (!canvasRef.current || aggregatedCandles.length === 0) {
+      console.log('Não há dados para desenhar ou canvas não disponível');
+      return;
+    }
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -53,13 +60,25 @@ export default function AdvancedCandleChart({ symbol, candles }: AdvancedCandleC
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const visibleCount = Math.floor((canvas.width - chartPadding * 2) / (candleWidth + candleSpacing));
-    const visibleCandles = aggregatedCandles.slice(
-      Math.max(0, aggregatedCandles.length - visibleCount + scrollOffset),
-      aggregatedCandles.length + scrollOffset
-    );
+    const availableWidth = canvas.width - chartPadding * 2;
+    const visibleCount = Math.max(10, Math.floor(availableWidth / (candleWidth + candleSpacing)));
     
-    if (visibleCandles.length === 0) return;
+    // Ajustar scrollOffset para não ultrapassar os limites
+    const maxScroll = Math.max(0, aggregatedCandles.length - visibleCount);
+    const safeScroll = Math.max(-maxScroll, Math.min(0, scrollOffset));
+
+    const startIdx = Math.max(0, aggregatedCandles.length - visibleCount + safeScroll);
+    const endIdx = Math.min(aggregatedCandles.length, startIdx + visibleCount);
+    
+    const visibleCandles = aggregatedCandles.slice(startIdx, endIdx);
+    
+    if (visibleCandles.length === 0) {
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '14px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Sem dados visíveis no momento', canvas.width / 2, canvas.height / 2);
+      return;
+    }
 
     const prices = visibleCandles.flatMap((c) => [c.high, c.low]);
     const minPrice = Math.min(...prices);

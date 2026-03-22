@@ -121,10 +121,18 @@ export default function MainLayout() {
         setTimeout(() => reject(new Error('Timeout ao carregar dados históricos')), 60000)
       );
 
-      const candlesData = await Promise.race([fetchPromise, timeoutPromise]);
+      let candlesData: any[] = [];
+      try {
+        candlesData = await Promise.race([fetchPromise, timeoutPromise]);
+      } catch (err) {
+        console.error('Erro ou timeout no fetch de candles:', err);
+      }
       
       if (candlesData && candlesData.length > 0) {
-        setCandles(candlesData);
+        console.log(`Carregados ${candlesData.length} candles com sucesso.`);
+        setCandles([...candlesData]); // Forçar nova referência
+        
+        // Carregar sinal do backend
         try {
           const res = await fetch(`${BACKEND_URL}/api/signal?symbol=${activeSymbol}&interval=30m`);
           const data = await res.json();
@@ -135,6 +143,7 @@ export default function MainLayout() {
           console.error('Erro ao carregar sinal:', err);
         }
       } else {
+        console.log('Nenhum dado do Coinbase, tentando backend...');
         const res = await fetch(`${BACKEND_URL}/api/signal?symbol=${activeSymbol}&interval=30m`);
         const data = await res.json();
         if (data.success) {
