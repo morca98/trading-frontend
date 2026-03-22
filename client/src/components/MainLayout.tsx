@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart } from 'recharts';
 import { TrendingUp, TrendingDown, Bell, History, Settings, Zap, Menu, X, BarChart3 } from 'lucide-react';
 import SignalCard from './SignalCard';
 import TradeHistory from './TradeHistory';
@@ -48,6 +47,7 @@ export default function MainLayout() {
   const [activeTab, setActiveTab] = useState('signal');
   const [trades, setTrades] = useState<any[]>([]);
   const [backtestResult, setBacktestResult] = useState<any>(null);
+  const [loadProgress, setLoadProgress] = useState(0);
 
   const symbols = [
     { label: 'BTC/USDT', value: 'BTCUSDT' },
@@ -76,7 +76,6 @@ export default function MainLayout() {
                   description: `Preço atual: $${price.toFixed(2)}`,
                 });
               });
-              // Desativar alerta após disparar
               alert.enabled = false;
             } else if (alert.type === 'below' && price <= alert.price) {
               import('sonner').then(({ toast }) => {
@@ -84,7 +83,6 @@ export default function MainLayout() {
                   description: `Preço atual: $${price.toFixed(2)}`,
                 });
               });
-              // Desativar alerta após disparar
               alert.enabled = false;
             }
           }
@@ -109,15 +107,23 @@ export default function MainLayout() {
   const loadSignal = async () => {
     try {
       setLoading(true);
+      setLoadProgress(0);
       const symbolMap: Record<string, string> = {
         'BTCUSDT': 'BTC/USDT',
         'ETHUSDT': 'ETH/USDT',
         'SOLUSDT': 'SOL/USDT',
       };
       const mappedSymbol = symbolMap[activeSymbol] || 'BTC/USDT';
-      // 35040 candles = 2 anos em timeframe 30m (35040 * 30min = 1051200 min = 730 dias)
-      const candlesData = await getCoinbaseProCandlesExtended(mappedSymbol, '30m', 35040);
-      if (candlesData.length > 0) {
+      
+      // 35040 candles = 2 anos em timeframe 30m
+      const fetchPromise = getCoinbaseProCandlesExtended(mappedSymbol, '30m', 35040, (p) => setLoadProgress(p));
+      const timeoutPromise = new Promise<any[]>((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout ao carregar dados históricos')), 60000)
+      );
+
+      const candlesData = await Promise.race([fetchPromise, timeoutPromise]);
+      
+      if (candlesData && candlesData.length > 0) {
         setCandles(candlesData);
         try {
           const res = await fetch(`${BACKEND_URL}/api/signal?symbol=${activeSymbol}&interval=30m`);
@@ -176,19 +182,10 @@ export default function MainLayout() {
     }
   };
 
-  const chartData = candles.map((c: any) => ({
-    time: new Date(c.time).toLocaleTimeString(),
-    close: c.close,
-    volume: c.volume,
-    high: c.high,
-    low: c.low,
-  }));
-
   return (
-    <>
-      <div className="w-full min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-        {/* Header */}
-        <div className="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
+    <div className="w-full min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+      {/* Header */}
+      <div className="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
         <div className="px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
@@ -263,7 +260,7 @@ export default function MainLayout() {
             {/* Signal Card */}
             {signal && <SignalCard signal={signal} />}
 
-            {/* Advanced Signals Panel - Colapsável */}
+            {/* Advanced Signals Panel */}
             <details className="bg-slate-700 rounded-lg p-3">
               <summary className="text-sm font-semibold text-white cursor-pointer hover:text-cyan-400">📊 Análise Avançada</summary>
               <div className="mt-3 space-y-2 max-h-96 overflow-y-auto">
@@ -287,19 +284,21 @@ export default function MainLayout() {
                   {signal?.macroTrend || '-'}
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-300 text-sm">ATR</span>
-                <span className="text-white font-bold">${signal?.atr || '-'}</span>
-              </div>
             </div>
           </div>
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 overflow-hidden flex flex-col">
+        <div className="flex-1 overflow-hidden flex flex-col bg-slate-900">
+          <LoadingProgress 
+            isLoading={loading} 
+            message="Carregando 2 anos de dados do Coinbase Pro..." 
+            externalProgress={loadProgress}
+          />
+          
           {/* Chart Area */}
-          <div className="flex-1 overflow-hidden">
-            <CompactTradingView symbol={activeSymbol} candles={candles} />
+          <div className="flex-1 overflow-hidden p-6">
+            <AdvancedCandleChart symbol={activeSymbol} candles={candles} />
           </div>
 
           {/* Performance Dashboard */}
@@ -385,8 +384,6 @@ export default function MainLayout() {
           </div>
         </div>
       </div>
-      </div>
-      <LoadingProgress isLoading={loading} message="Carregando 2 anos de dados do Coinbase Pro..." />
-    </>
+    </div>
   );
 }

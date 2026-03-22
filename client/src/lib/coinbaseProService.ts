@@ -104,7 +104,8 @@ import { aggregateCandles } from './candleAggregator';
 export async function getCoinbaseProCandlesExtended(
   symbol: string,
   timeframe: string = '30m',
-  totalCandles: number = 35040
+  totalCandles: number = 35040,
+  onProgress?: (progress: number) => void
 ): Promise<Candle[]> {
   try {
     const productId = SYMBOL_MAP[symbol] || 'BTC-USD';
@@ -164,6 +165,12 @@ export async function getCoinbaseProCandlesExtended(
 
       allCandles.unshift(...candles);
 
+      // Atualizar progresso real
+      if (onProgress) {
+        const currentProgress = Math.min(99, Math.round(((i + 1) / actualBatches) * 100));
+        onProgress(currentProgress);
+      }
+
       // Definir endTime para o candle mais antigo do lote atual para buscar o anterior
       if (data.length > 0) {
         // data[data.length - 1] é o mais antigo no lote (ordem decrescente)
@@ -174,7 +181,8 @@ export async function getCoinbaseProCandlesExtended(
         break;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      // Aumentar o delay ligeiramente para evitar 429 Too Many Requests em carregamentos longos
+      await new Promise((resolve) => setTimeout(resolve, 300));
     }
 
     let result = allCandles;

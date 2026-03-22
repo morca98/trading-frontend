@@ -5,26 +5,32 @@ import { Loader2 } from 'lucide-react';
 interface LoadingProgressProps {
   isLoading: boolean;
   message?: string;
+  externalProgress?: number;
 }
 
-export default function LoadingProgress({ isLoading, message = 'Carregando dados...' }: LoadingProgressProps) {
-  const [progress, setProgress] = useState(0);
+export default function LoadingProgress({ isLoading, message = 'Carregando dados...', externalProgress }: LoadingProgressProps) {
+  const [internalProgress, setInternalProgress] = useState(0);
 
   useEffect(() => {
     if (!isLoading) {
-      setProgress(0);
+      setInternalProgress(0);
+      return;
+    }
+
+    if (externalProgress !== undefined) {
+      setInternalProgress(externalProgress);
       return;
     }
 
     const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 90) return 90; // Não ultrapassar 90% até terminar
-        return prev + Math.random() * 15;
+      setInternalProgress((prev) => {
+        if (prev >= 90) return 90;
+        return prev + Math.random() * 10;
       });
     }, 500);
 
     return () => clearInterval(interval);
-  }, [isLoading]);
+  }, [isLoading, externalProgress]);
 
   if (!isLoading) return null;
 
@@ -39,10 +45,10 @@ export default function LoadingProgress({ isLoading, message = 'Carregando dados
           <div className="w-full bg-slate-700 rounded-full h-2 overflow-hidden">
             <div
               className="bg-gradient-to-r from-cyan-400 to-blue-500 h-full transition-all duration-300"
-              style={{ width: `${progress}%` }}
+              style={{ width: `${internalProgress}%` }}
             />
           </div>
-          <p className="text-xs text-slate-400 mt-2">{Math.round(progress)}%</p>
+          <p className="text-xs text-slate-400 mt-2">{Math.round(internalProgress)}%</p>
         </CardContent>
       </Card>
     </div>
