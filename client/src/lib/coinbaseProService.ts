@@ -18,15 +18,20 @@ const SYMBOL_MAP: Record<string, string> = {
   'SOL/USDT': 'SOL-USD',
 };
 
-// Mapeamento de timeframes para segundos
+// Mapeamento de timeframes para segundos (apenas os suportados pela API do Coinbase Pro)
 const TIMEFRAME_SECONDS: Record<string, number> = {
   '1m': 60,
   '5m': 300,
   '15m': 900,
-  '30m': 1800,
   '1h': 3600,
-  '4h': 14400,
+  '6h': 21600,
   '1d': 86400,
+};
+
+// Mapeamento para buscar dados base para timeframes não suportados
+const BASE_TIMEFRAME: Record<string, string> = {
+  '30m': '15m',
+  '4h': '1h',
 };
 
 /**
@@ -42,14 +47,19 @@ export async function getCoinbaseProCandles(
 ): Promise<Candle[]> {
   try {
     const productId = SYMBOL_MAP[symbol] || 'BTC-USD';
-    const granularity = TIMEFRAME_SECONDS[timeframe] || 1800;
-
-    // Coinbase Pro retorna máx 300 candles por requisição
-    const actualLimit = Math.min(limit, 300);
+    
+    // Verificar se o timeframe é suportado ou se precisa de um base
+    const fetchTimeframe = BASE_TIMEFRAME[timeframe] || timeframe;
+    const granularity = TIMEFRAME_SECONDS[fetchTimeframe] || 3600;
+    
+    // Se estivermos a agregar, precisamos de mais candles base
+    const multiplier = BASE_TIMEFRAME[timeframe] ? (timeframe === '30m' ? 2 : 4) : 1;
+    const fetchLimit = Math.min(limit * multiplier, 300);
 
     const url = new URL(`${COINBASE_PRO_API}/products/${productId}/candles`);
     url.searchParams.append('granularity', granularity.toString());
-    url.searchParams.append('limit', actualLimit.toString());
+    // A API do Coinbase Pro não suporta o parâmetro 'limit' diretamente no endpoint de candles, 
+    // ela retorna até 300 candles por padrão ou baseada no range start/end.
 
     const response = await fetch(url.toString());
 
@@ -57,22 +67,26 @@ export async function getCoinbaseProCandles(
       throw new Error(`Coinbase Pro API error: ${response.statusText}`);
     }
 
-    const data: CoinbaseCandle[] = await response.json();
+    const data: any[] = await response.json();
 
-    // Coinbase retorna em ordem reversa (mais recente primeiro)
-    // Precisamos reverter para ordem cronológica
-    const candles: Candle[] = data
-      .reverse()
-      .map((candle) => ({
-        time: candle.time * 1000, // Converter para ms
-        open: candle.open,
-        high: candle.high,
-        low: candle.low,
-        close: candle.close,
-        volume: candle.volume,
-      }));
+    if (!Array.isArray(data)) return [];
 
-    return candles;
+    // Coinbase retorna [time, low, high, open, close, volume]
+    const candles: Candle[] = data.map((c: any) => ({
+      time: c[0] * 1000,
+      low: c[1],
+      high: c[2],
+      open: c[3],
+      close: c[4],
+      volume: c[5],
+    })).reverse();
+
+    let result = candles;
+    if (BASE_TIMEFRAME[timeframe]) {
+      result = aggregateCandles(candles, timeframe as any);
+    }
+
+    return result.slice(-limit);
   } catch (error) {
     console.error('Erro ao buscar dados do Coinbase Pro:', error);
     return [];
@@ -85,6 +99,8 @@ export async function getCoinbaseProCandles(
  * @param timeframe Timeframe
  * @param totalCandles Total de candles desejados (padrão: 35040 = 2 anos em 30m)
  */
+import { aggregateCandles } from './candleAggregator';
+
 export async function getCoinbaseProCandlesExtended(
   symbol: string,
   timeframe: string = '30m',
@@ -92,67 +108,83 @@ export async function getCoinbaseProCandlesExtended(
 ): Promise<Candle[]> {
   try {
     const productId = SYMBOL_MAP[symbol] || 'BTC-USD';
-    const granularity = TIMEFRAME_SECONDS[timeframe] || 1800;
+    
+    // Verificar se o timeframe é suportado ou se precisa de um base
+    const fetchTimeframe = BASE_TIMEFRAME[timeframe] || timeframe;
+    const granularity = TIMEFRAME_SECONDS[fetchTimeframe] || 3600;
+    
+    // Se estivermos a agregar, precisamos de mais candles base
+    const multiplier = BASE_TIMEFRAME[timeframe] ? (timeframe === '30m' ? 2 : 4) : 1;
+    const fetchTotal = totalCandles * multiplier;
 
     const allCandles: Candle[] = [];
     let endTime: Date | undefined;
     const batchSize = 300;
-    const batches = Math.ceil(totalCandles / batchSize);
-    console.log(`Carregando ${totalCandles} candles em ${batches} lotes...`);
+    const batches = Math.ceil(fetchTotal / batchSize);
+    
+    // Limitar o número de lotes para evitar esperas excessivas (máx 250 lotes = 75.000 candles base)
+    // 75.000 candles de 15m = ~37.500 candles de 30m (~2 anos)
+    const maxBatches = 250;
+    const actualBatches = Math.min(batches, maxBatches);
+    
+    console.log(`Carregando ${fetchTotal} candles base (${fetchTimeframe}) em ${actualBatches} lotes para gerar ${totalCandles} candles de ${timeframe}...`);
 
-    for (let i = 0; i < batches; i++) {
+    for (let i = 0; i < actualBatches; i++) {
       const url = new URL(`${COINBASE_PRO_API}/products/${productId}/candles`);
       url.searchParams.append('granularity', granularity.toString());
-      url.searchParams.append('limit', batchSize.toString());
-
+      
+      // Usar 'end' em vez de 'before' conforme documentação oficial
       if (endTime) {
-        url.searchParams.append('before', Math.floor(endTime.getTime() / 1000).toString());
+        url.searchParams.append('end', endTime.toISOString());
       }
 
       const response = await fetch(url.toString());
 
       if (!response.ok) {
-        console.warn(`Batch ${i + 1} failed, stopping`);
+        console.warn(`Batch ${i + 1} failed: ${response.statusText}`);
         break;
       }
 
       const data: CoinbaseCandle[] = await response.json();
 
-      if (data.length === 0) {
+      if (!Array.isArray(data) || data.length === 0) {
         break;
       }
 
-      const candles: Candle[] = data
-        .reverse()
-        .map((candle) => ({
-          time: candle.time * 1000,
-          open: candle.open,
-          high: candle.high,
-          low: candle.low,
-          close: candle.close,
-          volume: candle.volume,
-        }));
+      // Coinbase retorna [time, low, high, open, close, volume]
+      // O mapeamento anterior estava assumindo chaves de objeto, mas a API retorna arrays
+      const candles: Candle[] = data.map((c: any) => ({
+        time: c[0] * 1000,
+        low: c[1],
+        high: c[2],
+        open: c[3],
+        close: c[4],
+        volume: c[5],
+      })).reverse();
 
       allCandles.unshift(...candles);
 
-      // Definir endTime para próximo batch
+      // Definir endTime para o candle mais antigo do lote atual para buscar o anterior
       if (data.length > 0) {
-        endTime = new Date(data[0].time * 1000);
+        // data[data.length - 1] é o mais antigo no lote (ordem decrescente)
+        endTime = new Date(data[data.length - 1][0] * 1000);
       }
 
-      // Parar se temos candles suficientes
-      if (allCandles.length >= totalCandles) {
+      if (allCandles.length >= fetchTotal) {
         break;
       }
 
-      // Delay para evitar rate limiting (200ms entre requisições)
       await new Promise((resolve) => setTimeout(resolve, 200));
-      
-      // Log de progresso
-      console.log(`Lote ${i + 1}/${batches} concluído (${allCandles.length} candles carregados)`);
     }
 
-    return allCandles.slice(-totalCandles);
+    let result = allCandles;
+    
+    // Agregar se necessário
+    if (BASE_TIMEFRAME[timeframe]) {
+      result = aggregateCandles(allCandles, timeframe as any);
+    }
+
+    return result.slice(-totalCandles);
   } catch (error) {
     console.error('Erro ao buscar histórico estendido:', error);
     return [];

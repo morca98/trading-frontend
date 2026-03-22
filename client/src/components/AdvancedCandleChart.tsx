@@ -495,8 +495,22 @@ export default function AdvancedCandleChart({ symbol, candles }: AdvancedCandleC
 
       {/* Gráficos */}
       <Card className="bg-slate-800 border-slate-700">
-        <CardHeader className="pb-2">
+        <CardHeader className="pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-white text-sm">{symbol} - {timeframe.toUpperCase()}</CardTitle>
+          <div className="flex gap-4 text-[10px]">
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-0.5 bg-[#3b82f6]"></div>
+              <span className="text-slate-400">EMA 20</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-0.5 bg-[#f59e0b]"></div>
+              <span className="text-slate-400">EMA 50</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <div className="w-3 h-0.5 border-t border-dashed border-[#8b5cf6]"></div>
+              <span className="text-slate-400">B. Bands</span>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <canvas
@@ -513,8 +527,12 @@ export default function AdvancedCandleChart({ symbol, candles }: AdvancedCandleC
       {/* RSI */}
       {showIndicators.rsi && (
         <Card className="bg-slate-800 border-slate-700">
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-white text-sm">RSI (14)</CardTitle>
+            <div className="flex items-center gap-1 text-[10px]">
+              <div className="w-3 h-0.5 bg-[#06b6d4]"></div>
+              <span className="text-slate-400">RSI Line</span>
+            </div>
           </CardHeader>
           <CardContent>
             <canvas
@@ -530,8 +548,18 @@ export default function AdvancedCandleChart({ symbol, candles }: AdvancedCandleC
       {/* MACD */}
       {showIndicators.macd && (
         <Card className="bg-slate-800 border-slate-700">
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-white text-sm">MACD (12,26,9)</CardTitle>
+            <div className="flex gap-3 text-[10px]">
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-0.5 bg-[#3b82f6]"></div>
+                <span className="text-slate-400">MACD</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-0.5 bg-[#f59e0b]"></div>
+                <span className="text-slate-400">Signal</span>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <canvas
