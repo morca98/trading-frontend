@@ -123,9 +123,9 @@ export async function getCoinbaseProCandlesExtended(
     const batchSize = 300;
     const batches = Math.ceil(fetchTotal / batchSize);
     
-    // Limitar o número de lotes para evitar esperas excessivas (máx 250 lotes = 75.000 candles base)
-    // 75.000 candles de 15m = ~37.500 candles de 30m (~2 anos)
-    const maxBatches = 250;
+    // Limitar o número de lotes para evitar esperas excessivas (máx 125 lotes = 37.500 candles base)
+    // 37.500 candles de 15m = ~18.750 candles de 30m (~1 ano)
+    const maxBatches = 125;
     const actualBatches = Math.min(batches, maxBatches);
     
     console.log(`Carregando ${fetchTotal} candles base (${fetchTimeframe}) em ${actualBatches} lotes para gerar ${totalCandles} candles de ${timeframe}...`);

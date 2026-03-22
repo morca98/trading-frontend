@@ -115,8 +115,8 @@ export default function MainLayout() {
       };
       const mappedSymbol = symbolMap[activeSymbol] || 'BTC/USDT';
       
-      // 35040 candles = 2 anos em timeframe 30m
-      const fetchPromise = getCoinbaseProCandlesExtended(mappedSymbol, '30m', 35040, (p) => setLoadProgress(p));
+      // 17520 candles = 1 ano em timeframe 30m (17520 * 30min = 525600 min = 365 dias)
+      const fetchPromise = getCoinbaseProCandlesExtended(mappedSymbol, '30m', 17520, (p) => setLoadProgress(p));
       const timeoutPromise = new Promise<any[]>((_, reject) => 
         setTimeout(() => reject(new Error('Timeout ao carregar dados históricos')), 60000)
       );
@@ -292,7 +292,7 @@ export default function MainLayout() {
         <div className="flex-1 overflow-hidden flex flex-col bg-slate-900">
           <LoadingProgress 
             isLoading={loading} 
-            message="Carregando 2 anos de dados do Coinbase Pro..." 
+            message="Carregando 1 ano de dados do Coinbase Pro..." 
             externalProgress={loadProgress}
           />
           
