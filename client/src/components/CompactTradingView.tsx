@@ -29,6 +29,8 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
   const [priceChange, setPriceChange] = useState(0);
   const [showEMA20, setShowEMA20] = useState(true);
   const [showEMA50, setShowEMA50] = useState(true);
+  const [showRSI, setShowRSI] = useState(false);
+  const [showMACD, setShowMACD] = useState(false);
 
   useEffect(() => {
     if (!chartContainerRef.current || candles.length === 0) return;
@@ -180,7 +182,7 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
       window.removeEventListener('resize', handleResize);
       chart.remove();
     };
-  }, [timeframe, showEMA20, showEMA50, candles]);
+  }, [timeframe, showEMA20, showEMA50, showRSI, showMACD, candles]);
 
   // Desenhar RSI
   useEffect(() => {
@@ -348,7 +350,7 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
         </div>
 
         {/* Indicadores */}
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer hover:text-slate-300">
             <input
               type="checkbox"
@@ -367,6 +369,24 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
             />
             <span className="text-yellow-400">EMA 50</span>
           </label>
+          <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer hover:text-slate-300">
+            <input
+              type="checkbox"
+              checked={showRSI}
+              onChange={(e) => setShowRSI(e.target.checked)}
+              className="w-3 h-3 cursor-pointer"
+            />
+            <span className="text-cyan-400">RSI</span>
+          </label>
+          <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer hover:text-slate-300">
+            <input
+              type="checkbox"
+              checked={showMACD}
+              onChange={(e) => setShowMACD(e.target.checked)}
+              className="w-3 h-3 cursor-pointer"
+            />
+            <span className="text-purple-400">MACD</span>
+          </label>
         </div>
       </div>
 
@@ -380,28 +400,32 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
       </div>
 
       {/* RSI */}
-      <div className="border-t border-slate-700 bg-slate-800/50">
-        <div className="px-4 py-2">
-          <p className="text-xs text-slate-400 font-semibold mb-1">RSI (14)</p>
-          <canvas
-            ref={rsiCanvasRef}
-            className="w-full"
-            style={{ height: '100px' }}
-          />
+      {showRSI && (
+        <div className="border-t border-slate-700 bg-slate-800/50">
+          <div className="px-4 py-2">
+            <p className="text-xs text-slate-400 font-semibold mb-1">RSI (14)</p>
+            <canvas
+              ref={rsiCanvasRef}
+              className="w-full"
+              style={{ height: '100px' }}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* MACD */}
-      <div className="border-t border-slate-700 bg-slate-800/50">
-        <div className="px-4 py-2">
-          <p className="text-xs text-slate-400 font-semibold mb-1">MACD (12,26,9)</p>
-          <canvas
-            ref={macdCanvasRef}
-            className="w-full"
-            style={{ height: '100px' }}
-          />
+      {showMACD && (
+        <div className="border-t border-slate-700 bg-slate-800/50">
+          <div className="px-4 py-2">
+            <p className="text-xs text-slate-400 font-semibold mb-1">MACD (12,26,9)</p>
+            <canvas
+              ref={macdCanvasRef}
+              className="w-full"
+              style={{ height: '100px' }}
+            />
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

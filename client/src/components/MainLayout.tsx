@@ -14,6 +14,7 @@ import AdvancedCandleChart from './AdvancedCandleChart';
 import TradingViewChart from './TradingViewChart';
 import CompactTradingView from './CompactTradingView';
 import AdvancedSignalsPanel from './AdvancedSignalsPanel';
+import LiquidationHeatmap from './LiquidationHeatmap';
 
 const BACKEND_URL = 'https://trading-backend-production-5dd4.up.railway.app';
 
@@ -199,8 +200,16 @@ export default function MainLayout() {
             {/* Signal Card */}
             {signal && <SignalCard signal={signal} />}
 
-            {/* Advanced Signals Panel */}
-            <AdvancedSignalsPanel symbol={activeSymbol} candles={candles} />
+            {/* Advanced Signals Panel - Colapsável */}
+            <details className="bg-slate-700 rounded-lg p-3">
+              <summary className="text-sm font-semibold text-white cursor-pointer hover:text-cyan-400">📊 Análise Avançada</summary>
+              <div className="mt-3 space-y-2 max-h-96 overflow-y-auto">
+                <AdvancedSignalsPanel symbol={activeSymbol} candles={candles} />
+              </div>
+            </details>
+
+            {/* Liquidation Heatmap */}
+            <LiquidationHeatmap symbol={activeSymbol} candles={candles} />
 
             {/* Quick Stats */}
             <div className="bg-slate-700 p-4 rounded-lg space-y-2">
