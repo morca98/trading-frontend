@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createChart, ColorType } from 'lightweight-charts';
 import { Button } from '@/components/ui/button';
 import { TrendingUp, TrendingDown } from 'lucide-react';
-import { aggregateCandles, calculateEMA, calculateRSI, calculateMACD, Candle, Timeframe } from '@/lib/candleAggregator';
+import { aggregateCandles, calculateEMA, calculateRSI, calculateMACD, calculateATR, Candle, Timeframe } from '@/lib/candleAggregator';
+import { calculateVolumeProfile, detectSupportResistance, calculateLiquidationLevels } from '@/lib/advancedAnalysis';
 
 interface CompactTradingViewProps {
   symbol: string;
@@ -164,6 +165,107 @@ export default function CompactTradingView({ symbol, candles }: CompactTradingVi
 
       ema50Series.setData(ema50Data);
     }
+
+    // Calcular níveis
+    const volumeProfile = calculateVolumeProfile(aggregatedCandles, 40);
+    const supportResistance = detectSupportResistance(aggregatedCandles, 20);
+    const atr = calculateATR(aggregatedCandles, 14);
+    const liquidationLevels = calculateLiquidationLevels(aggregatedCandles, atr);
+
+    // Desenhar POC
+    const pocSeries = (chart as any).addLineSeries({
+      color: '#06b6d4',
+      lineWidth: 2,
+      lineStyle: 2,
+    });
+    pocSeries.setData([
+      { time: Math.floor(aggregatedCandles[0].time / 1000) as any, value: volumeProfile.poc },
+      { time: Math.floor(aggregatedCandles[aggregatedCandles.length - 1].time / 1000) as any, value: volumeProfile.poc },
+    ]);
+
+    // Desenhar VAH
+    const vahSeries = (chart as any).addLineSeries({
+      color: '#10b981',
+      lineWidth: 1,
+      lineStyle: 3,
+    });
+    vahSeries.setData([
+      { time: Math.floor(aggregatedCandles[0].time / 1000) as any, value: volumeProfile.vah },
+      { time: Math.floor(aggregatedCandles[aggregatedCandles.length - 1].time / 1000) as any, value: volumeProfile.vah },
+    ]);
+
+    // Desenhar VAL
+    const valSeries = (chart as any).addLineSeries({
+      color: '#ef4444',
+      lineWidth: 1,
+      lineStyle: 3,
+    });
+    valSeries.setData([
+      { time: Math.floor(aggregatedCandles[0].time / 1000) as any, value: volumeProfile.val },
+      { time: Math.floor(aggregatedCandles[aggregatedCandles.length - 1].time / 1000) as any, value: volumeProfile.val },
+    ]);
+
+    // Desenhar Suportes
+    supportResistance
+      .filter((sr) => sr.type === 'support')
+      .slice(0, 3)
+      .forEach((support) => {
+        const supportSeries = (chart as any).addLineSeries({
+          color: '#10b981',
+          lineWidth: 1,
+        });
+        supportSeries.setData([
+          { time: Math.floor(aggregatedCandles[0].time / 1000) as any, value: support.level },
+          { time: Math.floor(aggregatedCandles[aggregatedCandles.length - 1].time / 1000) as any, value: support.level },
+        ]);
+      });
+
+    // Desenhar Resistências
+    supportResistance
+      .filter((sr) => sr.type === 'resistance')
+      .slice(0, 3)
+      .forEach((resistance) => {
+        const resistanceSeries = (chart as any).addLineSeries({
+          color: '#ef4444',
+          lineWidth: 1,
+        });
+        resistanceSeries.setData([
+          { time: Math.floor(aggregatedCandles[0].time / 1000) as any, value: resistance.level },
+          { time: Math.floor(aggregatedCandles[aggregatedCandles.length - 1].time / 1000) as any, value: resistance.level },
+        ]);
+      });
+
+    // Desenhar Liquidações Long
+    liquidationLevels
+      .filter((liq) => liq.type === 'long')
+      .slice(0, 3)
+      .forEach((liquidation) => {
+        const liqSeries = (chart as any).addLineSeries({
+          color: '#8b5cf6',
+          lineWidth: 1,
+          lineStyle: 2,
+        });
+        liqSeries.setData([
+          { time: Math.floor(aggregatedCandles[0].time / 1000) as any, value: liquidation.level },
+          { time: Math.floor(aggregatedCandles[aggregatedCandles.length - 1].time / 1000) as any, value: liquidation.level },
+        ]);
+      });
+
+    // Desenhar Liquidações Short
+    liquidationLevels
+      .filter((liq) => liq.type === 'short')
+      .slice(0, 3)
+      .forEach((liquidation) => {
+        const liqSeries = (chart as any).addLineSeries({
+          color: '#f97316',
+          lineWidth: 1,
+          lineStyle: 2,
+        });
+        liqSeries.setData([
+          { time: Math.floor(aggregatedCandles[0].time / 1000) as any, value: liquidation.level },
+          { time: Math.floor(aggregatedCandles[aggregatedCandles.length - 1].time / 1000) as any, value: liquidation.level },
+        ]);
+      });
 
     chart.timeScale().fitContent();
 

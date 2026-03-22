@@ -108,31 +108,11 @@ export default function MainLayout() {
   const loadSignal = async () => {
     try {
       setLoading(true);
-      const symbolMap: Record<string, string> = {
-        'BTCUSDT': 'BTC/USDT',
-        'ETHUSDT': 'ETH/USDT',
-        'SOLUSDT': 'SOL/USDT',
-      };
-      const mappedSymbol = symbolMap[activeSymbol] || 'BTC/USDT';
-      const candlesData = await getCoinbaseProCandlesExtended(mappedSymbol, '30m', 600);
-      if (candlesData.length > 0) {
-        setCandles(candlesData);
-        try {
-          const res = await fetch(`${BACKEND_URL}/api/signal?symbol=${activeSymbol}&interval=30m`);
-          const data = await res.json();
-          if (data.success) {
-            setSignal(data.signal || null);
-          }
-        } catch (err) {
-          console.error('Erro ao carregar sinal:', err);
-        }
-      } else {
-        const res = await fetch(`${BACKEND_URL}/api/signal?symbol=${activeSymbol}&interval=30m`);
-        const data = await res.json();
-        if (data.success) {
-          setSignal(data.signal || null);
-          setCandles(data.candles || []);
-        }
+      const res = await fetch(`${BACKEND_URL}/api/signal?symbol=${activeSymbol}&interval=30m`);
+      const data = await res.json();
+      if (data.success) {
+        setSignal(data.signal || null);
+        setCandles(data.candles || []);
       }
     } catch (err) {
       console.error('Erro ao carregar sinal:', err);
@@ -143,18 +123,11 @@ export default function MainLayout() {
 
   const loadPrice = async () => {
     try {
-      const symbolMap: Record<string, string> = {
-        'BTCUSDT': 'BTC-USD',
-        'ETHUSDT': 'ETH-USD',
-        'SOLUSDT': 'SOL-USD',
-      };
-      const productId = symbolMap[activeSymbol] || 'BTC-USD';
-      const res = await fetch(`https://api.exchange.coinbase.com/products/${productId}/ticker`);
-      if (res.ok) {
-        const data = await res.json();
-        setPrice(parseFloat(data.price));
-        const open24h = parseFloat(data.open_24h);
-        setPriceChange(open24h > 0 ? ((parseFloat(data.price) - open24h) / open24h) * 100 : 0);
+      const res = await fetch(`${BACKEND_URL}/api/price?symbol=${activeSymbol}`);
+      const data = await res.json();
+      if (data.success) {
+        setPrice(data.price);
+        setPriceChange(data.change);
       }
     } catch (err) {
       console.error('Erro ao carregar preço:', err);
