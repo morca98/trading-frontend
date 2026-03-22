@@ -80,15 +80,15 @@ export async function getCoinbaseProCandles(
 }
 
 /**
- * Buscar múltiplos lotes de candles para histórico maior
+ * Buscar múltiplos lotes de candles para histórico maior (até 2 anos)
  * @param symbol Símbolo
  * @param timeframe Timeframe
- * @param totalCandles Total de candles desejados
+ * @param totalCandles Total de candles desejados (padrão: 35040 = 2 anos em 30m)
  */
 export async function getCoinbaseProCandlesExtended(
   symbol: string,
   timeframe: string = '30m',
-  totalCandles: number = 600
+  totalCandles: number = 35040
 ): Promise<Candle[]> {
   try {
     const productId = SYMBOL_MAP[symbol] || 'BTC-USD';
@@ -98,6 +98,7 @@ export async function getCoinbaseProCandlesExtended(
     let endTime: Date | undefined;
     const batchSize = 300;
     const batches = Math.ceil(totalCandles / batchSize);
+    console.log(`Carregando ${totalCandles} candles em ${batches} lotes...`);
 
     for (let i = 0; i < batches; i++) {
       const url = new URL(`${COINBASE_PRO_API}/products/${productId}/candles`);
@@ -144,8 +145,11 @@ export async function getCoinbaseProCandlesExtended(
         break;
       }
 
-      // Delay para evitar rate limiting
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      // Delay para evitar rate limiting (200ms entre requisições)
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      
+      // Log de progresso
+      console.log(`Lote ${i + 1}/${batches} concluído (${allCandles.length} candles carregados)`);
     }
 
     return allCandles.slice(-totalCandles);

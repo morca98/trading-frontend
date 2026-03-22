@@ -15,6 +15,7 @@ import TradingViewChart from './TradingViewChart';
 import CompactTradingView from './CompactTradingView';
 import AdvancedSignalsPanel from './AdvancedSignalsPanel';
 import LiquidationHeatmap from './LiquidationHeatmap';
+import LoadingProgress from './LoadingProgress';
 
 import { BACKEND_URL } from '@/const';
 import { getCoinbaseProCandlesExtended } from '@/lib/coinbaseProService';
@@ -114,7 +115,8 @@ export default function MainLayout() {
         'SOLUSDT': 'SOL/USDT',
       };
       const mappedSymbol = symbolMap[activeSymbol] || 'BTC/USDT';
-      const candlesData = await getCoinbaseProCandlesExtended(mappedSymbol, '30m', 600);
+      // 35040 candles = 2 anos em timeframe 30m (35040 * 30min = 1051200 min = 730 dias)
+      const candlesData = await getCoinbaseProCandlesExtended(mappedSymbol, '30m', 35040);
       if (candlesData.length > 0) {
         setCandles(candlesData);
         try {
@@ -183,9 +185,10 @@ export default function MainLayout() {
   }));
 
   return (
-    <div className="w-full min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Header */}
-      <div className="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
+    <>
+      <div className="w-full min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+        {/* Header */}
+        <div className="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
         <div className="px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
@@ -382,6 +385,8 @@ export default function MainLayout() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+      <LoadingProgress isLoading={loading} message="Carregando 2 anos de dados do Coinbase Pro..." />
+    </>
   );
 }
