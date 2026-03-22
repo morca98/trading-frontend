@@ -9,7 +9,7 @@ import ParameterOptimizer from './ParameterOptimizer';
 import AlertsPanel from './AlertsPanel';
 import PerformanceDashboard from './PerformanceDashboard';
 import InteractiveBacktest from './InteractiveBacktest';
-import AdvancedCandleChart from './AdvancedCandleChart';
+import OptimizedCandleChart from './OptimizedCandleChart';
 import TradingViewChart from './TradingViewChart';
 import CompactTradingView from './CompactTradingView';
 import AdvancedSignalsPanel from './AdvancedSignalsPanel';
@@ -118,7 +118,7 @@ export default function MainLayout() {
       // 17520 candles = 1 ano em timeframe 30m (17520 * 30min = 525600 min = 365 dias)
       const fetchPromise = getCoinbaseProCandlesExtended(mappedSymbol, '30m', 17520, (p) => setLoadProgress(p));
       const timeoutPromise = new Promise<any[]>((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout ao carregar dados históricos')), 60000)
+        setTimeout(() => reject(new Error('Timeout ao carregar dados históricos')), 45000)
       );
 
       let candlesData: any[] = [];
@@ -307,7 +307,7 @@ export default function MainLayout() {
           
           {/* Chart Area */}
           <div className="flex-1 overflow-hidden p-6">
-            <AdvancedCandleChart symbol={activeSymbol} candles={candles} />
+            <OptimizedCandleChart symbol={activeSymbol} candles={candles} />
           </div>
 
           {/* Performance Dashboard */}
