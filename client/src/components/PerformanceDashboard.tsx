@@ -151,8 +151,37 @@ export default function PerformanceDashboard({ backtestResult, loading, onRunBac
   };
 
   const exportToPDF = () => {
-    // Implementar exportação em PDF
-    console.log('Exportando para PDF...');
+    if (!stats) return;
+    
+    const report = `
+RELATÓRIO DE PERFORMANCE - CRYPTO AI AGENT
+------------------------------------------
+Total de Trades: ${stats.totalTrades}
+Win Rate: ${stats.winRate}%
+Profit Factor: ${stats.profitFactor}
+Retorno Total: ${stats.totalReturn}%
+Capital Final: $${stats.finalCapital}
+Max Drawdown: ${stats.maxDD}%
+Sharpe Ratio: ${stats.sharpeRatio}
+Máx. Wins Consecutivos: ${stats.maxConsecWins}
+Máx. Losses Consecutivos: ${stats.maxConsecLosses}
+------------------------------------------
+Gerado em: ${new Date().toLocaleString()}
+    `;
+    
+    const blob = new Blob([report], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `performance_report_${new Date().getTime()}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    import('sonner').then(({ toast }) => {
+      toast.success('Relatório exportado com sucesso!');
+    });
   };
 
   return (

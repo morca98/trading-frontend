@@ -15,3 +15,5 @@ export const getLoginUrl = () => {
 
   return url.toString();
 };
+
+export const BACKEND_URL = 'https://trading-backend-production-5dd4.up.railway.app';

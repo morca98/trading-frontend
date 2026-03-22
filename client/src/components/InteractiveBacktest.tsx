@@ -6,7 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Loader2, Zap, TrendingUp } from 'lucide-react';
 
-const BACKEND_URL = 'https://trading-backend-production-5dd4.up.railway.app';
+import { BACKEND_URL } from '@/const';
 
 interface BacktestParams {
   rsiPeriod: number;

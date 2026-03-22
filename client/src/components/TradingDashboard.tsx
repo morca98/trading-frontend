@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { TrendingUp, TrendingDown, AlertCircle, CheckCircle2, Zap } from 'lucide-react';
 
-const BACKEND_URL = 'https://trading-backend-production-5dd4.up.railway.app';
+import { BACKEND_URL } from '@/const';
 
 interface Signal {
   signal: string;
@@ -62,8 +62,8 @@ export default function TradingDashboard() {
       setLoading(true);
       const res = await fetch(`${BACKEND_URL}/api/signal?symbol=${activeSymbol}&interval=30m`);
       const data = await res.json();
-      if (data.success && data.signal) {
-        setSignal(data.signal);
+      if (data.success) {
+        setSignal(data.signal || null);
         setCandles(data.candles || []);
       }
     } catch (err) {

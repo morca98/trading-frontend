@@ -16,7 +16,7 @@ import CompactTradingView from './CompactTradingView';
 import AdvancedSignalsPanel from './AdvancedSignalsPanel';
 import LiquidationHeatmap from './LiquidationHeatmap';
 
-const BACKEND_URL = 'https://trading-backend-production-5dd4.up.railway.app';
+import { BACKEND_URL } from '@/const';
 
 interface Signal {
   signal: string;
@@ -62,6 +62,37 @@ export default function MainLayout() {
       loadPrice();
     }, 10000);
 
+    const checkAlerts = () => {
+      const stored = localStorage.getItem(`alerts_${activeSymbol}`);
+      if (stored && price > 0) {
+        const alerts = JSON.parse(stored);
+        alerts.forEach((alert: any) => {
+          if (alert.enabled) {
+            if (alert.type === 'above' && price >= alert.price) {
+              import('sonner').then(({ toast }) => {
+                toast.success(`Alerta: ${activeSymbol} subiu acima de $${alert.price}!`, {
+                  description: `Preço atual: $${price.toFixed(2)}`,
+                });
+              });
+              // Desativar alerta após disparar
+              alert.enabled = false;
+            } else if (alert.type === 'below' && price <= alert.price) {
+              import('sonner').then(({ toast }) => {
+                toast.error(`Alerta: ${activeSymbol} caiu abaixo de $${alert.price}!`, {
+                  description: `Preço atual: $${price.toFixed(2)}`,
+                });
+              });
+              // Desativar alerta após disparar
+              alert.enabled = false;
+            }
+          }
+        });
+        localStorage.setItem(`alerts_${activeSymbol}`, JSON.stringify(alerts));
+      }
+    };
+
+    const alertInterval = setInterval(checkAlerts, 5000);
+
     const signalInterval = setInterval(() => {
       loadSignal();
     }, 30000);
@@ -69,6 +100,7 @@ export default function MainLayout() {
     return () => {
       clearInterval(priceInterval);
       clearInterval(signalInterval);
+      clearInterval(alertInterval);
     };
   }, [activeSymbol]);
 
@@ -77,8 +109,8 @@ export default function MainLayout() {
       setLoading(true);
       const res = await fetch(`${BACKEND_URL}/api/signal?symbol=${activeSymbol}&interval=30m`);
       const data = await res.json();
-      if (data.success && data.signal) {
-        setSignal(data.signal);
+      if (data.success) {
+        setSignal(data.signal || null);
         setCandles(data.candles || []);
       }
     } catch (err) {
