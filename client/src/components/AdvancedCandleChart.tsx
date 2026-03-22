@@ -1,16 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
 import {
   aggregateCandles,
-  calculateEMA,
-  calculateSMA,
-  calculateBollingerBands,
-  calculateMACD,
-  calculateRSI,
-  calculateATR,
   Candle,
   Timeframe,
 } from '@/lib/candleAggregator';
@@ -32,42 +25,22 @@ const TIMEFRAMES: { label: string; value: Timeframe }[] = [
 
 export default function AdvancedCandleChart({ symbol, candles }: AdvancedCandleChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rsiCanvasRef = useRef<HTMLCanvasElement>(null);
-  const macdCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const [timeframe, setTimeframe] = useState<Timeframe>('30m');
   const [zoomLevel, setZoomLevel] = useState(1);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [hoveredCandle, setHoveredCandle] = useState<Candle | null>(null);
 
-  const [showIndicators, setShowIndicators] = useState({
-    ema20: true,
-    ema50: true,
-    bollingerBands: false,
-    rsi: true,
-    macd: true,
-  });
-
   const candleWidth = 8 * zoomLevel;
   const candleSpacing = 2 * zoomLevel;
-  const chartPadding = 50;
+  const chartPadding = 60;
 
   // Agregar candles baseado no timeframe
   const aggregatedCandles = aggregateCandles(candles, timeframe);
 
-  // Calcular indicadores
-  const ema20 = calculateEMA(aggregatedCandles, 20);
-  const ema50 = calculateEMA(aggregatedCandles, 50);
-  const bb = calculateBollingerBands(aggregatedCandles, 20, 2);
-  const rsi = calculateRSI(aggregatedCandles, 14);
-  const { macdLine, signalLine, histogram } = calculateMACD(aggregatedCandles);
-  const atr = calculateATR(aggregatedCandles, 14);
-
   useEffect(() => {
     drawMainChart();
-    drawRSI();
-    drawMACD();
-  }, [aggregatedCandles, zoomLevel, scrollOffset, showIndicators, hoveredCandle]);
+  }, [aggregatedCandles, zoomLevel, scrollOffset, hoveredCandle]);
 
   const drawMainChart = () => {
     if (!canvasRef.current || aggregatedCandles.length === 0) return;
@@ -80,7 +53,12 @@ export default function AdvancedCandleChart({ symbol, candles }: AdvancedCandleC
     ctx.fillStyle = '#0f172a';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const visibleCandles = aggregatedCandles.slice(Math.max(0, aggregatedCandles.length - 100 + scrollOffset));
+    const visibleCount = Math.floor((canvas.width - chartPadding * 2) / (candleWidth + candleSpacing));
+    const visibleCandles = aggregatedCandles.slice(
+      Math.max(0, aggregatedCandles.length - visibleCount + scrollOffset),
+      aggregatedCandles.length + scrollOffset
+    );
+    
     if (visibleCandles.length === 0) return;
 
     const prices = visibleCandles.flatMap((c) => [c.high, c.low]);
@@ -98,6 +76,45 @@ export default function AdvancedCandleChart({ symbol, candles }: AdvancedCandleC
         ((price - (minPrice - padding)) / (priceRange + padding * 2)) * chartHeight
       );
     };
+
+    // --- Volume Profile Calculation ---
+    const numBins = 40;
+    const binSize = (maxPrice - minPrice) / numBins;
+    const bins = new Array(numBins).fill(0);
+    
+    visibleCandles.forEach(candle => {
+      const startBin = Math.floor((Math.min(candle.open, candle.close) - minPrice) / binSize);
+      const endBin = Math.floor((Math.max(candle.open, candle.close) - minPrice) / binSize);
+      
+      // Distribuir volume proporcionalmente entre os bins que o candle cobre
+      const candleRange = Math.abs(candle.close - candle.open) || binSize/10;
+      for (let i = Math.max(0, startBin); i <= Math.min(numBins - 1, endBin); i++) {
+        bins[i] += candle.volume / (endBin - startBin + 1);
+      }
+    });
+
+    const maxVolumeBin = Math.max(...bins);
+    const profileWidth = 150; // Largura máxima do perfil de volume
+
+    // Desenhar Volume Profile (à direita)
+    bins.forEach((vol, i) => {
+      const yTop = priceToY(minPrice + (i + 1) * binSize);
+      const yBottom = priceToY(minPrice + i * binSize);
+      const barWidth = (vol / maxVolumeBin) * profileWidth;
+      
+      ctx.fillStyle = 'rgba(59, 130, 246, 0.2)'; // Azul suave transparente
+      ctx.fillRect(canvas.width - chartPadding - barWidth, yTop, barWidth, Math.abs(yBottom - yTop) - 1);
+      
+      // Destacar o POC (Point of Control)
+      if (vol === maxVolumeBin) {
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.5)'; // Vermelho para o POC
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(canvas.width - chartPadding - profileWidth, (yTop + yBottom) / 2);
+        ctx.lineTo(canvas.width - chartPadding, (yTop + yBottom) / 2);
+        ctx.stroke();
+      }
+    });
 
     // Grid
     ctx.strokeStyle = '#334155';
@@ -140,76 +157,7 @@ export default function AdvancedCandleChart({ symbol, candles }: AdvancedCandleC
       // Corpo
       ctx.fillStyle = isGreen ? '#10b981' : '#ef4444';
       ctx.fillRect(x, bodyTop, candleWidth, bodyHeight);
-
-      ctx.strokeStyle = isGreen ? '#059669' : '#dc2626';
-      ctx.lineWidth = 1;
-      ctx.strokeRect(x, bodyTop, candleWidth, bodyHeight);
     });
-
-    // EMA 20
-    if (showIndicators.ema20 && ema20.length > 0) {
-      ctx.strokeStyle = '#3b82f6';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-
-      ema20.slice(Math.max(0, ema20.length - visibleCandles.length)).forEach((value, idx) => {
-        const x = chartPadding + idx * (candleWidth + candleSpacing) + candleWidth / 2;
-        const y = priceToY(value);
-
-        if (idx === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-
-      ctx.stroke();
-    }
-
-    // EMA 50
-    if (showIndicators.ema50 && ema50.length > 0) {
-      ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-
-      ema50.slice(Math.max(0, ema50.length - visibleCandles.length)).forEach((value, idx) => {
-        const x = chartPadding + idx * (candleWidth + candleSpacing) + candleWidth / 2;
-        const y = priceToY(value);
-
-        if (idx === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-
-      ctx.stroke();
-    }
-
-    // Bollinger Bands
-    if (showIndicators.bollingerBands && bb.upper.length > 0) {
-      ctx.strokeStyle = '#8b5cf6';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([5, 5]);
-
-      // Upper band
-      ctx.beginPath();
-      bb.upper.slice(Math.max(0, bb.upper.length - visibleCandles.length)).forEach((value, idx) => {
-        const x = chartPadding + idx * (candleWidth + candleSpacing) + candleWidth / 2;
-        const y = priceToY(value);
-
-        if (idx === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-
-      // Lower band
-      ctx.beginPath();
-      bb.lower.slice(Math.max(0, bb.lower.length - visibleCandles.length)).forEach((value, idx) => {
-        const x = chartPadding + idx * (candleWidth + candleSpacing) + candleWidth / 2;
-        const y = priceToY(value);
-
-        if (idx === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      });
-      ctx.stroke();
-
-      ctx.setLineDash([]);
-    }
 
     // Eixos
     ctx.strokeStyle = '#475569';
@@ -257,125 +205,6 @@ export default function AdvancedCandleChart({ symbol, candles }: AdvancedCandleC
     }
   };
 
-  const drawRSI = () => {
-    if (!rsiCanvasRef.current || rsi.length === 0 || !showIndicators.rsi) return;
-
-    const canvas = rsiCanvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const visibleRSI = rsi.slice(Math.max(0, rsi.length - 100 + scrollOffset));
-    const chartHeight = canvas.height - 40;
-
-    // Grid
-    ctx.strokeStyle = '#334155';
-    ctx.lineWidth = 1;
-    [30, 50, 70].forEach((level) => {
-      const y = canvas.height - 20 - (level / 100) * chartHeight;
-      ctx.beginPath();
-      ctx.moveTo(chartPadding, y);
-      ctx.lineTo(canvas.width - chartPadding, y);
-      ctx.stroke();
-
-      ctx.fillStyle = '#94a3b8';
-      ctx.font = '10px Arial';
-      ctx.textAlign = 'right';
-      ctx.fillText(level.toString(), chartPadding - 10, y + 3);
-    });
-
-    // RSI
-    ctx.strokeStyle = '#06b6d4';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-
-    visibleRSI.forEach((value, idx) => {
-      const x = chartPadding + idx * (candleWidth + candleSpacing) + candleWidth / 2;
-      const y = canvas.height - 20 - (value / 100) * chartHeight;
-
-      if (idx === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-
-    ctx.stroke();
-
-    // Zonas
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.1)';
-    ctx.fillRect(chartPadding, canvas.height - 20 - (70 / 100) * chartHeight, canvas.width - chartPadding * 2, (20 / 100) * chartHeight);
-
-    ctx.fillStyle = 'rgba(239, 68, 68, 0.1)';
-    ctx.fillRect(chartPadding, canvas.height - 20 - (30 / 100) * chartHeight, canvas.width - chartPadding * 2, (30 / 100) * chartHeight);
-  };
-
-  const drawMACD = () => {
-    if (!macdCanvasRef.current || macdLine.length === 0 || !showIndicators.macd) return;
-
-    const canvas = macdCanvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.fillStyle = '#0f172a';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const visibleMACD = macdLine.slice(Math.max(0, macdLine.length - 100 + scrollOffset));
-    const visibleSignal = signalLine.slice(Math.max(0, signalLine.length - 100 + scrollOffset));
-    const visibleHist = histogram.slice(Math.max(0, histogram.length - 100 + scrollOffset));
-
-    const allValues = [...visibleMACD, ...visibleSignal];
-    const maxVal = Math.max(...allValues.map(Math.abs));
-    const chartHeight = canvas.height - 40;
-    const centerY = canvas.height / 2;
-
-    // MACD Line
-    ctx.strokeStyle = '#3b82f6';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-
-    visibleMACD.forEach((value, idx) => {
-      const x = chartPadding + idx * (candleWidth + candleSpacing) + candleWidth / 2;
-      const y = centerY - (value / maxVal) * (chartHeight / 2);
-
-      if (idx === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-
-    ctx.stroke();
-
-    // Signal Line
-    ctx.strokeStyle = '#f59e0b';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-
-    visibleSignal.forEach((value, idx) => {
-      const x = chartPadding + idx * (candleWidth + candleSpacing) + candleWidth / 2;
-      const y = centerY - (value / maxVal) * (chartHeight / 2);
-
-      if (idx === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-
-    ctx.stroke();
-
-    // Histogram
-    visibleHist.forEach((value, idx) => {
-      const x = chartPadding + idx * (candleWidth + candleSpacing) + candleWidth / 2;
-      const y = centerY - (value / maxVal) * (chartHeight / 2);
-
-      ctx.fillStyle = value >= 0 ? 'rgba(16, 185, 129, 0.5)' : 'rgba(239, 68, 68, 0.5)';
-      ctx.fillRect(x - 1, Math.min(y, centerY), 2, Math.abs(y - centerY));
-    });
-
-    // Zero line
-    ctx.strokeStyle = '#475569';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(chartPadding, centerY);
-    ctx.lineTo(canvas.width - chartPadding, centerY);
-    ctx.stroke();
-  };
-
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -388,8 +217,12 @@ export default function AdvancedCandleChart({ symbol, candles }: AdvancedCandleC
       return;
     }
 
-    const candleIndex = Math.floor((x - chartPadding) / (candleWidth + 2));
-    const visibleCandles = aggregatedCandles.slice(Math.max(0, aggregatedCandles.length - 100 + scrollOffset));
+    const candleIndex = Math.floor((x - chartPadding) / (candleWidth + candleSpacing));
+    const visibleCount = Math.floor((canvas.width - chartPadding * 2) / (candleWidth + candleSpacing));
+    const visibleCandles = aggregatedCandles.slice(
+      Math.max(0, aggregatedCandles.length - visibleCount + scrollOffset),
+      aggregatedCandles.length + scrollOffset
+    );
 
     if (candleIndex >= 0 && candleIndex < visibleCandles.length) {
       setHoveredCandle(visibleCandles[candleIndex]);
@@ -406,7 +239,7 @@ export default function AdvancedCandleChart({ symbol, candles }: AdvancedCandleC
   const handleScroll = (direction: 'left' | 'right') => {
     setScrollOffset((prev) => {
       const newOffset = direction === 'left' ? prev - 10 : prev + 10;
-      return Math.max(-aggregatedCandles.length + 100, Math.min(newOffset, 0));
+      return Math.min(newOffset, 0);
     });
   };
 
@@ -431,21 +264,6 @@ export default function AdvancedCandleChart({ symbol, candles }: AdvancedCandleC
               >
                 {tf.label}
               </Button>
-            ))}
-          </div>
-
-          {/* Indicadores */}
-          <div className="flex gap-3 flex-wrap">
-            {Object.entries(showIndicators).map(([key, value]) => (
-              <label key={key} className="flex items-center gap-2 text-xs text-slate-400">
-                <input
-                  type="checkbox"
-                  checked={value}
-                  onChange={(e) => setShowIndicators((prev) => ({ ...prev, [key]: e.target.checked }))}
-                  className="w-4 h-4"
-                />
-                <span>{key.replace(/([A-Z])/g, ' $1').trim()}</span>
-              </label>
             ))}
           </div>
 
@@ -499,16 +317,12 @@ export default function AdvancedCandleChart({ symbol, candles }: AdvancedCandleC
           <CardTitle className="text-white text-sm">{symbol} - {timeframe.toUpperCase()}</CardTitle>
           <div className="flex gap-4 text-[10px]">
             <div className="flex items-center gap-1">
-              <div className="w-3 h-0.5 bg-[#3b82f6]"></div>
-              <span className="text-slate-400">EMA 20</span>
+              <div className="w-3 h-3 bg-blue-500/30"></div>
+              <span className="text-slate-400">Volume Profile</span>
             </div>
             <div className="flex items-center gap-1">
-              <div className="w-3 h-0.5 bg-[#f59e0b]"></div>
-              <span className="text-slate-400">EMA 50</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <div className="w-3 h-0.5 border-t border-dashed border-[#8b5cf6]"></div>
-              <span className="text-slate-400">B. Bands</span>
+              <div className="w-3 h-0.5 bg-red-500/50"></div>
+              <span className="text-slate-400">POC (Point of Control)</span>
             </div>
           </div>
         </CardHeader>
@@ -516,61 +330,13 @@ export default function AdvancedCandleChart({ symbol, candles }: AdvancedCandleC
           <canvas
             ref={canvasRef}
             width={1000}
-            height={450}
+            height={500}
             onMouseMove={handleCanvasMouseMove}
             onMouseLeave={() => setHoveredCandle(null)}
             className="w-full bg-slate-900 rounded border border-slate-700 cursor-crosshair"
           />
         </CardContent>
       </Card>
-
-      {/* RSI */}
-      {showIndicators.rsi && (
-        <Card className="bg-slate-800 border-slate-700">
-          <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-white text-sm">RSI (14)</CardTitle>
-            <div className="flex items-center gap-1 text-[10px]">
-              <div className="w-3 h-0.5 bg-[#06b6d4]"></div>
-              <span className="text-slate-400">RSI Line</span>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <canvas
-              ref={rsiCanvasRef}
-              width={1000}
-              height={150}
-              className="w-full bg-slate-900 rounded border border-slate-700"
-            />
-          </CardContent>
-        </Card>
-      )}
-
-      {/* MACD */}
-      {showIndicators.macd && (
-        <Card className="bg-slate-800 border-slate-700">
-          <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-white text-sm">MACD (12,26,9)</CardTitle>
-            <div className="flex gap-3 text-[10px]">
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-0.5 bg-[#3b82f6]"></div>
-                <span className="text-slate-400">MACD</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <div className="w-3 h-0.5 bg-[#f59e0b]"></div>
-                <span className="text-slate-400">Signal</span>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <canvas
-              ref={macdCanvasRef}
-              width={1000}
-              height={150}
-              className="w-full bg-slate-900 rounded border border-slate-700"
-            />
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
