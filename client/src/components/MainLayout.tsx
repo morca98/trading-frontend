@@ -8,7 +8,7 @@ import SignalCard from './SignalCard';
 import AlertsPanel from './AlertsPanel';
 
 import { BACKEND_URL } from '@/const';
-import { getCoinbaseProCandlesExtended } from '@/lib/coinbaseProService';
+import { getBybitCandlesExtended } from '@/lib/bybitService';
 import { candleCache } from '@/lib/candleCache';
 
 interface Signal {
@@ -77,15 +77,8 @@ export default function MainLayout() {
       setLoading(true);
       setLoadProgress(0);
 
-      const symbolMap: Record<string, string> = {
-        'BTCUSDT': 'BTC/USDT',
-        'ETHUSDT': 'ETH/USDT',
-        'SOLUSDT': 'SOL/USDT',
-      };
-      const mappedSymbol = symbolMap[activeSymbol] || 'BTC/USDT';
-
-      const candlesData = await getCoinbaseProCandlesExtended(
-        mappedSymbol,
+      const candlesData = await getBybitCandlesExtended(
+        activeSymbol,
         '1d',
         365,
         (p) => setLoadProgress(p)
