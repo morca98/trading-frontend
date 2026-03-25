@@ -425,22 +425,27 @@ async function main() {
   console.log('Telegram:', TELEGRAM_TOKEN ? 'Configurado' : 'NÃO configurado (modo console)');
   console.log('');
 
-  await sendTelegram(
-    '<b>🚀 Stock Signal Bot Iniciado!</b>\n\n' +
-    'Símbolos: ' + SYMBOLS.join(', ') + '\n' +
-    'Intervalo: Velas Diárias (1d)\n' +
-    'Estratégia: EMA9/21 Crossover + ADX + RSI\n' +
-    'TP/SL: Dinâmico (ATR-based, 1%–3%)\n' +
-    'R:R: 2.0x – 3.0x (baseado em ADX)\n' +
-    'Gestão de Risco: Trailing Stop + Breakeven Automático\n\n' +
-    'Scan a cada 4h | Verificação de trades a cada 15min'
-  );
+  var startTime = new Date().toLocaleString('pt-PT', { timeZone: 'Europe/Lisbon' });
+  var activeTradePairs = Object.keys(activeTrades).length;
 
-  // Teste de sinal forçado no arranque
   await sendTelegram(
-    '<b>🧪 Teste de Comunicação</b>\n' +
-    'O bot está a comunicar corretamente com o Telegram.\n' +
-    'A aguardar o próximo scan de sinais...'
+    '<b>✅ Stock Signal Bot — ONLINE</b>\n' +
+    '━━━━━━━━━━━━━━━━━━━━━━\n' +
+    '🕐 Arranque: ' + startTime + '\n' +
+    '📡 Telegram: Ligado e funcional\n' +
+    '📈 Símbolos a monitorizar: ' + SYMBOLS.length + '\n' +
+    '💼 Trades ativos (persistência): ' + activeTradePairs + '\n' +
+    '🏆 Histórico: ' + winCount + 'W / ' + lossCount + 'L | P&L: ' + (totalPnl >= 0 ? '+' : '') + totalPnl.toFixed(2) + '%\n' +
+    '━━━━━━━━━━━━━━━━━━━━━━\n' +
+    '<b>Configuração:</b>\n' +
+    '• Intervalo: Velas Diárias (1d)\n' +
+    '• Estratégia: EMA9/21 Crossover + ADX + RSI\n' +
+    '• TP/SL: Dinâmico (ATR-based, 1%–3%)\n' +
+    '• R:R: 2.0x – 3.0x (baseado em ADX)\n' +
+    '• Gestão de Risco: Trailing Stop + Breakeven Automático\n' +
+    '• Scan a cada 4h | Verificação de trades a cada 15min\n' +
+    '━━━━━━━━━━━━━━━━━━━━━━\n' +
+    'O bot está operacional e pronto para gerar sinais. 🚀'
   );
 
   // Primeira execução imediata
