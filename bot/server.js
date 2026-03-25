@@ -436,6 +436,13 @@ async function main() {
     'Scan a cada 4h | Verificação de trades a cada 15min'
   );
 
+  // Teste de sinal forçado no arranque
+  await sendTelegram(
+    '<b>🧪 Teste de Comunicação</b>\n' +
+    'O bot está a comunicar corretamente com o Telegram.\n' +
+    'A aguardar o próximo scan de sinais...'
+  );
+
   // Primeira execução imediata
   await runBot();
 
