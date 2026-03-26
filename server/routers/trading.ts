@@ -1,4 +1,4 @@
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { z } from "zod";
 import {
   getActiveTrades,
@@ -10,12 +10,12 @@ import {
 
 export const tradingRouter = router({
   // Get all active trades
-  getActiveTrades: protectedProcedure.query(async () => {
+  getActiveTrades: publicProcedure.query(async () => {
     return await getActiveTrades();
   }),
 
   // Get signals by symbol
-  getSignals: protectedProcedure
+  getSignals: publicProcedure
     .input(
       z.object({
         symbol: z.string(),
@@ -26,14 +26,14 @@ export const tradingRouter = router({
       return await getSignalsBySymbol(input.symbol, input.limit);
     }),
 
-  getGlobalSignals: protectedProcedure
+  getGlobalSignals: publicProcedure
     .input(z.object({ limit: z.number().optional().default(50) }))
     .query(async ({ input }) => {
       const { getGlobalSignals } = await import("../db");
       return await getGlobalSignals(input.limit);
     }),
 
-  getPerformance: protectedProcedure
+  getPerformance: publicProcedure
     .input(z.object({ limit: z.number().optional().default(30) }))
     .query(async ({ input }) => {
       const { getPerformanceHistory } = await import("../db");
@@ -41,19 +41,19 @@ export const tradingRouter = router({
     }),
 
   // Get daily stats
-  getDailyStats: protectedProcedure
+  getDailyStats: publicProcedure
     .input(z.object({ date: z.string() }))
     .query(async ({ input }) => {
       return await getDailyStats(input.date);
     }),
 
   // Get configured symbols
-  getSymbols: protectedProcedure.query(async () => {
+  getSymbols: publicProcedure.query(async () => {
     return await getSymbols();
   }),
 
   // Add new symbol to monitor
-  addSymbol: protectedProcedure
+  addSymbol: publicProcedure
     .input(
       z.object({
         symbol: z.string().toUpperCase(),

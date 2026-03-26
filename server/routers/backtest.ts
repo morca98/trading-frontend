@@ -1,10 +1,10 @@
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, protectedProcedure, publicProcedure } from "../_core/trpc";
 import { z } from "zod";
 import { runBacktest, optimizeStrategy } from "../trading/backtest";
 import { fetchCandles } from "../trading/marketData";
 
 export const backtestRouter = router({
-  runBacktest: protectedProcedure
+  runBacktest: publicProcedure
     .input(
       z.object({
         symbol: z.string().toUpperCase(),
@@ -41,7 +41,7 @@ export const backtestRouter = router({
       }
     }),
 
-  optimizeStrategy: protectedProcedure
+  optimizeStrategy: publicProcedure
     .input(
       z.object({
         symbol: z.string().toUpperCase(),
@@ -81,7 +81,7 @@ export const backtestRouter = router({
       }
     }),
 
-  compareSymbols: protectedProcedure
+  compareSymbols: publicProcedure
     .input(
       z.object({
         symbols: z.array(z.string().toUpperCase()),
