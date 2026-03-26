@@ -153,11 +153,20 @@ export async function initializeEngine(): Promise<void> {
 
   // Enviar mensagem de arranque para o Telegram
   const startupMsg = formatStartupNotification(symbols.length);
-  await sendTelegram(startupMsg);
+  const sent = await sendTelegram(startupMsg);
+  if (sent) {
+    console.log("[Engine] Startup notification sent to Telegram.");
+  } else {
+    console.error("[Engine] Failed to send startup notification to Telegram.");
+  }
 
   // Primeiro scan imediato
   console.log("[Engine] Starting initial market scan...");
-  await runTradingLoop();
+  try {
+    await runTradingLoop();
+  } catch (error) {
+    console.error("[Engine] Initial market scan failed:", error);
+  }
 }
 
 // ── Loops de background (iniciados após o servidor estar pronto) ──────────────
