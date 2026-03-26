@@ -21,8 +21,7 @@ export default function Dashboard() {
       { symbol: "GOOGL", sector: "Technology", region: "US" },
       { symbol: "NVDA", sector: "Technology", region: "US" },
       { symbol: "TSLA", sector: "Consumer", region: "US" },
-      { symbol: "BTCUSDT", sector: "Crypto", region: "CRYPTO" },
-      { symbol: "ETHUSDT", sector: "Crypto", region: "CRYPTO" },
+
       { symbol: "EDP.LS", sector: "Utilities", region: "PT" },
       { symbol: "JMT.LS", sector: "Retail", region: "PT" },
       { symbol: "GALP.LS", sector: "Energy", region: "PT" },

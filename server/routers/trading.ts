@@ -81,9 +81,7 @@ export const tradingRouter = router({
     const success = await sendTelegram(message + "\n\n🔄 <b>Sincronização Manual Realizada</b>");
     
     if (!success) {
-      const tokenPreview = ENV.telegramToken ? `${ENV.telegramToken.substring(0, 4)}...${ENV.telegramToken.substring(ENV.telegramToken.length - 4)}` : "MISSING";
-      const chatIdPreview = ENV.telegramChatId || "MISSING";
-      throw new Error(`Falha ao enviar para o Telegram. Token: ${tokenPreview}, ChatID: ${chatIdPreview}. Verifique se as variáveis de ambiente estão configuradas no Railway.`);
+      throw new Error("Falha ao enviar mensagem para o Telegram.");
     }
     
     return { success: true };

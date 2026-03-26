@@ -86,10 +86,6 @@ export async function initializeEngine(): Promise<void> {
       { s: "GALP.LS", r: "PT", sec: "Energy" },
       { s: "BCP.LS", r: "PT", sec: "Financials" },
       { s: "NOS.LS", r: "PT", sec: "Communication Services" },
-      { s: "BTCUSDT", r: "CRYPTO", sec: "Crypto" },
-      { s: "ETHUSDT", r: "CRYPTO", sec: "Crypto" },
-      { s: "BNBUSDT", r: "CRYPTO", sec: "Crypto" },
-      { s: "SOLUSDT", r: "CRYPTO", sec: "Crypto" }
     ];
     console.log(`[Engine] Adding ${defaultSymbols.length} default symbols...`);
     // Use Promise.all to add symbols faster
