@@ -4,8 +4,9 @@ WORKDIR /app
 # Instalar pnpm globalmente
 RUN npm install -g pnpm@10.4.1
 
-# Copiar ficheiros de dependências
+# Copiar ficheiros de dependências e patches (necessários antes do pnpm install)
 COPY package.json pnpm-lock.yaml ./
+COPY patches/ ./patches/
 
 # Instalar dependências com pnpm (frozen lockfile para reprodutibilidade)
 RUN pnpm install --frozen-lockfile
