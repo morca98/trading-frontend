@@ -28,8 +28,8 @@ import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
 import { Button } from "./ui/button";
 
 const menuItems = [
-  { icon: LayoutDashboard, label: "Page 1", path: "/" },
-  { icon: Users, label: "Page 2", path: "/some-path" },
+  { icon: LayoutDashboard, label: "DASHBOARD", path: "/" },
+  { icon: BarChart3, label: "BACKTEST", path: "/backtest" },
 ];
 
 const SIDEBAR_WIDTH_KEY = "sidebar-width";
@@ -159,22 +159,24 @@ function DashboardLayoutContent({
           className="border-r-0"
           disableTransition={isResizing}
         >
-          <SidebarHeader className="h-16 justify-center">
-            <div className="flex items-center gap-3 px-2 transition-all w-full">
-              <button
-                onClick={toggleSidebar}
-                className="h-8 w-8 flex items-center justify-center hover:bg-accent rounded-lg transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring shrink-0"
-                aria-label="Toggle navigation"
-              >
-                <PanelLeft className="h-4 w-4 text-muted-foreground" />
-              </button>
-              {!isCollapsed ? (
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="font-semibold tracking-tight truncate">
-                    Navigation
-                  </span>
-                </div>
-              ) : null}
+          <SidebarHeader className="h-20 justify-center border-b border-border/50">
+            <div className="flex flex-col px-4 transition-all w-full">
+              <div className="flex items-center justify-between">
+                <span className="font-bold tracking-[3px] text-primary text-xl" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+                  CRYPTO AI AGENT
+                </span>
+                <button
+                  onClick={toggleSidebar}
+                  className="h-8 w-8 flex items-center justify-center hover:bg-accent/10 rounded transition-colors focus:outline-none shrink-0"
+                >
+                  <PanelLeft className="h-4 w-4 text-muted-foreground" />
+                </button>
+              </div>
+              {!isCollapsed && (
+                <span className="text-[8px] text-muted-foreground tracking-[3px] mt-1">
+                  TERMINAL V3.0
+                </span>
+              )}
             </div>
           </SidebarHeader>
 
@@ -188,10 +190,10 @@ function DashboardLayoutContent({
                       isActive={isActive}
                       onClick={() => setLocation(item.path)}
                       tooltip={item.label}
-                      className={`h-10 transition-all font-normal`}
+                      className={`h-12 transition-all font-mono text-[10px] tracking-[2px] ${isActive ? "text-primary border-r-2 border-primary bg-primary/5" : "text-muted-foreground hover:text-primary"}`}
                     >
                       <item.icon
-                        className={`h-4 w-4 ${isActive ? "text-primary" : ""}`}
+                        className={`h-4 w-4 mr-2 ${isActive ? "text-primary" : ""}`}
                       />
                       <span>{item.label}</span>
                     </SidebarMenuButton>
