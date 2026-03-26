@@ -1,16 +1,84 @@
 'use strict';
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  STOCK BACKTEST ENGINE
-//  Idêntico ao BacktestEngine do trading-backend, adaptado para ações.
-//  Usa Yahoo Finance v8 API via axios para dados históricos.
+//  STOCK BACKTEST ENGINE  –  MTF V3
+//
+//  Usa a mesma lógica de generateMtfSignal do server.js para garantir
+//  consistência total entre os sinais ao vivo e os resultados de backtest.
+//
+//  Estratégia de candles sintéticos:
+//   - Semanal: cada 5 candles diários agrupados numa vela semanal
+//   - 4h: cada candle diário dividido em 6 candles de 4h sintéticos
 // ─────────────────────────────────────────────────────────────────────────────
 
 const axios = require('axios');
-const { calcEMA, calcATR, calcTrend } = require('./signal');
+const {
+  generateMtfSignal,
+  calcEMA,
+  calcATR,
+  calcTrend,
+} = require('./signal');
 
 const YF_BASE    = 'https://query1.finance.yahoo.com/v8/finance/chart';
 const YF_HEADERS = { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' };
+
+// ── CANDLES SINTÉTICOS ────────────────────────────────────────────────────────
+
+/**
+ * Agrupa candles diários em candles semanais sintéticos (5 dias = 1 semana).
+ */
+function buildWeeklyCandles(dailyCandles) {
+  var weekly = [];
+  for (var i = 0; i < dailyCandles.length; i += 5) {
+    var chunk = dailyCandles.slice(i, i + 5);
+    if (chunk.length === 0) continue;
+    weekly.push({
+      time:   chunk[0].time,
+      open:   chunk[0].open,
+      high:   Math.max.apply(null, chunk.map(function(c) { return c.high; })),
+      low:    Math.min.apply(null, chunk.map(function(c) { return c.low; })),
+      close:  chunk[chunk.length - 1].close,
+      volume: chunk.reduce(function(s, c) { return s + c.volume; }, 0),
+    });
+  }
+  return weekly;
+}
+
+/**
+ * Divide cada candle diário em 6 candles de 4h sintéticos.
+ */
+function buildH4Candles(dailyCandles) {
+  var h4    = [];
+  var h4ms  = 4 * 60 * 60 * 1000;
+
+  for (var d = 0; d < dailyCandles.length; d++) {
+    var day   = dailyCandles[d];
+    var range = day.high - day.low;
+    var volPerBar = day.volume / 6;
+
+    for (var j = 0; j < 6; j++) {
+      var t        = day.time + j * h4ms;
+      var midOpen  = day.open  + (day.close - day.open) * (j / 6);
+      var midClose = day.open  + (day.close - day.open) * ((j + 1) / 6);
+      var frac     = j / 5;
+      var subHigh  = midClose + range * 0.1 * (1 - frac);
+      var subLow   = midOpen  - range * 0.1 * frac;
+
+      h4.push({
+        time:   t,
+        open:   midOpen,
+        high:   Math.max(midOpen, midClose, subHigh),
+        low:    Math.min(midOpen, midClose, subLow),
+        close:  midClose,
+        volume: volPerBar,
+      });
+    }
+  }
+
+  return h4;
+}
+
+// ── MOTOR DE BACKTEST ─────────────────────────────────────────────────────────
 
 class StockBacktestEngine {
   constructor(options) {
@@ -31,7 +99,6 @@ class StockBacktestEngine {
     this.lastTradeDateSell = '';
   }
 
-  // ── DADOS HISTÓRICOS ────────────────────────────────────────────────────────
   async fetchCandles(interval, range) {
     var url = YF_BASE + '/' + this.symbol + '?interval=' + interval + '&range=' + range;
     var r   = await axios.get(url, { headers: YF_HEADERS, timeout: 20000 });
@@ -61,58 +128,54 @@ class StockBacktestEngine {
     return candles;
   }
 
-  // ── EXECUÇÃO DO BACKTEST ─────────────────────────────────────────────────────
+  /**
+   * Executa o backtest com a lógica MTF V3.
+   * Usa candles sintéticos de 4h e semanais derivados dos dados diários.
+   *
+   * @param {Function} generateSignalFn - Ignorado (mantido por compatibilidade).
+   *                                      Usa sempre generateMtfSignal internamente.
+   */
   async run(generateSignalFn) {
     console.log('[Backtest] A carregar dados para ' + this.symbol + '...');
 
     var candles = await this.fetchCandles(this.interval, this.range);
     console.log('[Backtest] ' + candles.length + ' velas diárias carregadas');
 
-    // Candles semanais para macro trend (equivalente aos 4h do backend cripto)
-    var candlesWeekly = [];
-    try {
-      candlesWeekly = await this.fetchCandles('1wk', '5y');
-      console.log('[Backtest] ' + candlesWeekly.length + ' velas semanais carregadas');
-    } catch (e) {
-      console.log('[Backtest] Sem dados semanais, macro trend menos preciso');
-    }
+    // Pré-calcular candles sintéticos para toda a série
+    var allWeeklyCandles = buildWeeklyCandles(candles);
+    var allH4Candles     = buildH4Candles(candles);
+
+    console.log('[Backtest] ' + allWeeklyCandles.length + ' velas semanais sintéticas');
+    console.log('[Backtest] ' + allH4Candles.length + ' velas de 4h sintéticas');
 
     this.trades  = [];
     this.capital = this.initialCapital;
     var lastLossCandle = -1;
     var self = this;
 
-    for (var i = 60; i < candles.length - 1; i++) {
-      var window        = candles.slice(0, i + 1);
-      var currentCandle = window[window.length - 1];
+    for (var i = 100; i < candles.length - 1; i++) {
+      var currentCandle = candles[i];
       var price         = currentCandle.close;
 
-      // Cooldown: 3 velas após perda (idêntico ao trading-backend)
+      // Cooldown: 3 velas após perda
       if (lastLossCandle > 0 && i - lastLossCandle < 3) continue;
 
-      // macroTrend a partir das velas semanais até ao momento atual
-      var macroTrend = 'NEUTRAL';
-      if (candlesWeekly.length > 0) {
-        var relevantW = candlesWeekly.filter(function(c) { return c.time <= currentCandle.time; });
-        if (relevantW.length >= 20) {
-          var closesW  = relevantW.map(function(c) { return c.close; });
-          var mEma50   = relevantW.length >= 50 ? calcEMA(closesW.slice(-50), 50) : calcEMA(closesW.slice(-20), 20);
-          var mEma200  = relevantW.length >= 200 ? calcEMA(closesW.slice(-200), 200) : mEma50;
-          var lastPW   = closesW[closesW.length - 1];
-          if      (lastPW > mEma50 && mEma50 > mEma200) macroTrend = 'BULL';
-          else if (lastPW < mEma50 && mEma50 < mEma200) macroTrend = 'BEAR';
-          else if (lastPW > mEma200)                     macroTrend = 'UP';
-          else                                            macroTrend = 'DOWN';
-        }
-      }
+      // Janelas para cada timeframe
+      var dailyWindow  = candles.slice(Math.max(0, i - 100), i + 1);
+      var weeklyWindow = allWeeklyCandles.slice(0, Math.ceil((i + 1) / 5));
+      var h4Window     = allH4Candles.slice(0, (i + 1) * 6);
 
-      var closesD    = window.map(function(c) { return c.close; });
-      var trendShort = calcTrend(closesD.slice(-10));
-      var atr        = calcATR(window, 14);
+      // Montar estrutura MTF
+      var mtfData = {
+        weeklyCandles: weeklyWindow.slice(-30),
+        dailyCandles:  dailyWindow,
+        h4Candles:     h4Window.slice(-120), // últimas 120 velas de 4h (~20 dias)
+      };
 
-      var signalResult = generateSignalFn(window, price, macroTrend, trendShort, atr);
+      // Gerar sinal MTF V3 (mesma lógica do bot ao vivo)
+      var signalResult = generateMtfSignal(mtfData);
 
-      if (!signalResult || signalResult.conf < 55) continue;
+      if (!signalResult || signalResult.conf < 65) continue;
 
       // Limite de 1 trade por dia por direção
       var currentDate = new Date(currentCandle.time).toISOString().slice(0, 10);
@@ -127,7 +190,7 @@ class StockBacktestEngine {
       var sl = signalResult.sl;
       var tp = signalResult.tp;
 
-      // Simular saída nas próximas 20 velas (20 dias de negociação)
+      // Simular saída nas próximas 20 velas
       var outcome   = null;
       var exitPrice = 0;
       var exitTime  = 0;
@@ -144,8 +207,7 @@ class StockBacktestEngine {
       }
 
       if (outcome) {
-        // PnL baseado no risco fixo por trade (idêntico ao trading-backend)
-        var rrMultiplier = parseFloat(signalResult.tpPct) / parseFloat(signalResult.slPct) || 2.2;
+        var rrMultiplier = parseFloat(signalResult.tpPct) / parseFloat(signalResult.slPct) || 2.5;
         var pnlAmount    = this.capital * this.riskPerTrade * (outcome === 'WIN' ? rrMultiplier : -1);
         var feeAmount    = this.capital * this.fee * 2;
         var netPnl       = pnlAmount - feeAmount;
@@ -161,17 +223,24 @@ class StockBacktestEngine {
         else                                this.lastTradeDateSell = tradeDate;
 
         this.trades.push({
-          time:     currentCandle.time,
-          exitTime: exitTime,
-          symbol:   this.symbol,
-          signal:   signalResult.signal,
-          entry:    entryPrice,
-          exit:     exitPrice,
-          outcome:  outcome,
-          pnl:      netPnl,
-          pnlPct:   (netPnl / (this.capital - netPnl)) * 100,
-          capital:  this.capital,
-          conf:     signalResult.conf,
+          time:        currentCandle.time,
+          exitTime:    exitTime,
+          symbol:      this.symbol,
+          signal:      signalResult.signal,
+          entry:       entryPrice,
+          exit:        exitPrice,
+          outcome:     outcome,
+          pnl:         netPnl,
+          pnlPct:      (netPnl / (this.capital - netPnl)) * 100,
+          capital:     this.capital,
+          conf:        signalResult.conf,
+          mtfSnapshot: signalResult.mtf ? {
+            weeklyRsi:              signalResult.mtf.weeklyRsi,
+            dailyMa70:              signalResult.mtf.dailyMa70,
+            h4Rsi:                  signalResult.mtf.h4Rsi,
+            h4MacdBullishDivergence: signalResult.mtf.h4MacdBullishDivergence,
+            h4CandleConfirmation:   signalResult.mtf.h4CandleConfirmation,
+          } : null,
         });
 
         // Avançar para a vela de saída

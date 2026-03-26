@@ -8,11 +8,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const StockBacktestEngine = require('./backtest-engine');
-const { generateSignal }  = require('./signal');
+const { generateMtfSignal } = require('./signal');
 
 async function runBacktest(symbol) {
   console.log('\n' + '='.repeat(55));
-  console.log('Backtest: ' + symbol);
+  console.log('Backtest MTF V3: ' + symbol);
   console.log('='.repeat(55));
 
   var engine = new StockBacktestEngine({
@@ -26,7 +26,7 @@ async function runBacktest(symbol) {
   });
 
   try {
-    var results = await engine.run(generateSignal);
+    var results = await engine.run(generateMtfSignal);
 
     console.log('Total Trades:   ' + results.totalTrades);
     console.log('Wins:           ' + results.wins);
@@ -74,7 +74,7 @@ async function runBacktest(symbol) {
 async function main() {
   var symbols = (process.argv[2] || process.env.SYMBOLS || 'AAPL,MSFT,NVDA').split(',');
 
-  console.log('\n🔬 STOCK SIGNAL BOT – BACKTEST (2 ANOS)');
+  console.log('\n🔬 STOCK SIGNAL BOT – BACKTEST MTF V3 (2 ANOS)');
   console.log('Símbolos: ' + symbols.join(', '));
   console.log('Capital inicial: $10,000 | Risco/trade: 2% | Comissão: 0.1%');
   console.log('');
