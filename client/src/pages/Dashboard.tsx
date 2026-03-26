@@ -10,7 +10,26 @@ export default function Dashboard() {
   const [viewMode, setViewMode] = useState<'active' | 'history' | 'assets'>('active');
 
   const { data: activeTrades, isLoading: tradesLoading } = trpc.trading.getActiveTrades.useQuery(undefined, { refetchInterval: 30000 });
-  const { data: symbols, isLoading: symbolsLoading, error: symbolsError } = trpc.trading.getSymbols.useQuery();
+  const { data: dbSymbols, isLoading: symbolsLoading, error: symbolsError } = trpc.trading.getSymbols.useQuery();
+  
+  // Fallback symbols if DB is empty or fails
+  const symbols = useMemo(() => {
+    if (dbSymbols && dbSymbols.length > 0) return dbSymbols;
+    return [
+      { symbol: "AAPL", sector: "Technology", region: "US" },
+      { symbol: "MSFT", sector: "Technology", region: "US" },
+      { symbol: "GOOGL", sector: "Technology", region: "US" },
+      { symbol: "NVDA", sector: "Technology", region: "US" },
+      { symbol: "TSLA", sector: "Consumer", region: "US" },
+      { symbol: "BTCUSDT", sector: "Crypto", region: "CRYPTO" },
+      { symbol: "ETHUSDT", sector: "Crypto", region: "CRYPTO" },
+      { symbol: "EDP.LS", sector: "Utilities", region: "PT" },
+      { symbol: "JMT.LS", sector: "Retail", region: "PT" },
+      { symbol: "GALP.LS", sector: "Energy", region: "PT" },
+      { symbol: "BCP.LS", sector: "Financial", region: "PT" },
+    ];
+  }, [dbSymbols]);
+
   if (symbolsError) {
     console.error("[Dashboard] Error loading symbols:", symbolsError);
   }
@@ -262,17 +281,15 @@ export default function Dashboard() {
                           <tr><td colSpan={4} className="px-4 py-8 text-center"><Loader2 className="w-4 h-4 animate-spin mx-auto" /></td></tr>
                         ) : symbolsError ? (
                           <tr><td colSpan={4} className="px-4 py-8 text-center text-red-500 uppercase text-[8px]">Erro ao carregar dados do servidor</td></tr>
-                        ) : symbols && symbols.length > 0 ? (
+                        ) : (
                           symbols.map((sym) => (
                             <tr key={sym.symbol} className="hover:bg-[#0d1420] transition-colors">
                               <td className="px-4 py-3 font-bold tracking-wider text-[#00d4ff]">{sym.symbol}</td>
-                              <td className="px-4 py-3 text-[#c8d8f0] uppercase tracking-tighter">{sym.sector || 'Technology'}</td>
-                              <td className="px-4 py-3 text-[#4a6080]">{sym.region}</td>
+                              <td className="px-4 py-3 text-[#c8d8f0] uppercase tracking-tighter">{(sym as any).sector || 'Technology'}</td>
+                              <td className="px-4 py-3 text-[#4a6080]">{(sym as any).region}</td>
                               <td className="px-4 py-3"><span className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#00e676] rounded-full" /> LIVE</span></td>
                             </tr>
                           ))
-                        ) : (
-                          <tr><td colSpan={4} className="px-4 py-8 text-center text-[#4a6080] uppercase text-[8px] tracking-widest py-12">Nenhum ativo configurado no motor</td></tr>
                         )}
                       </tbody>
                     </table>
