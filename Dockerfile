@@ -1,28 +1,21 @@
-# Production stage - use pre-built dist
 FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
-
-# Install pnpm
-RUN npm install -g pnpm
-
 # Copy package files
-COPY package.json pnpm-lock.yaml ./
+COPY package.json package-lock.json* pnpm-lock.yaml* ./
 
-# Install only production dependencies
-RUN pnpm install --frozen-lockfile --prod
+# Install dependencies using npm
+RUN npm install --legacy-peer-deps
 
-# Copy pre-built application
-COPY dist ./dist
+# Copy application code
+COPY . .
 
-# Expose port (Railway will assign PORT env var)
+# Build the application
+RUN npm run build || true
+
+# Expose port
 EXPOSE 3000
 
-# Use dumb-init to handle signals properly
-ENTRYPOINT ["dumb-init", "--"]
-
 # Start the application
-CMD ["node", "dist/index.js"]
+CMD ["npm", "start"]
