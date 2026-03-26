@@ -41,10 +41,7 @@ export default function Dashboard() {
   const { data: globalSignals, isLoading: signalsLoading } = trpc.trading.getGlobalSignals.useQuery({ limit: 50 }, { refetchInterval: 60000 });
   const { data: performanceData } = trpc.trading.getPerformance.useQuery({ limit: 30 }, { refetchInterval: 60000 });
   
-  const syncTelegram = trpc.trading.syncTelegram.useMutation({
-    onSuccess: () => toast.success("Telegram sincronizado com sucesso! Verifique o seu bot."),
-    onError: () => toast.error("Falha ao sincronizar Telegram. Verifique as credenciais.")
-  });
+
 
   // Processar dados para o gráfico de performance
   const chartData = useMemo(() => {
@@ -329,22 +326,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="bg-[#0d1420] border border-[#1a2535] p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Bell className="w-3 h-3 text-[#00d4ff]" />
-                <span className="text-[10px] font-bold tracking-widest uppercase">Notificações Telegram</span>
-              </div>
-              <p className="text-[9px] text-[#4a6080] leading-relaxed mb-4 uppercase tracking-wider">Bot ativo: Sinais, Fechos e Relatórios Diários (08:00 UTC).</p>
-              <Button 
-                variant="outline" 
-                className="w-full border-[#1a2535] text-[#4a6080] hover:text-[#00d4ff] hover:border-[#00d4ff] text-[8px] uppercase tracking-[2px] h-8 bg-transparent group"
-                onClick={() => syncTelegram.mutate()}
-                disabled={syncTelegram.isPending}
-              >
-                {syncTelegram.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-2" /> : <RefreshCw className="w-3 h-3 mr-2 group-hover:rotate-180 transition-transform" />}
-                Sincronizar Bot
-              </Button>
-            </div>
+
           </div>
         </div>
       </div>
