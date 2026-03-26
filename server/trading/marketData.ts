@@ -59,8 +59,8 @@ export interface StockInsightsResponse {
  */
 export async function fetchCandles(
   symbol: string,
-  interval: "1d" | "1wk" = "1d",
-  range: "2y" | "5y" = "2y"
+  interval: "1d" | "1wk" | "4h" = "1d",
+  range: "2y" | "5y" | "6mo" = "2y"
 ): Promise<Candle[]> {
   try {
     // In production, this would call the stock-analysis skill via MCP
@@ -68,6 +68,7 @@ export async function fetchCandles(
     console.log(`[MarketData] Fetching ${symbol} candles (${interval}, ${range})`);
 
     // TODO: Replace with actual MCP call to Yahoo/get_stock_chart
+    // Suporta intervalos: 1d, 1wk, 4h | Ranges: 2y, 5y, 6mo
     // const response = await mcpClient.call("Yahoo/get_stock_chart", {
     //   symbol,
     //   interval,

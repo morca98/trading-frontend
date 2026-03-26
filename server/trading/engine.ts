@@ -1,6 +1,13 @@
 /**
  * Trading Engine
- * Main orchestrator for signal generation, trade monitoring, and reporting
+ * Main orchestrator for signal generation, trade monitoring, and reporting.
+ *
+ * Estratégia de sinal (Multi-Timeframe V3):
+ *  1. RSI Semanal < 50  → espaço macro para subir
+ *  2. Preço Diário > MA70 → tendência de médio prazo bullish
+ *  3. RSI 4h < 40       → pullback / sobrevenda intraday
+ *  4. MACD 4h divergência bullish → momentum a recuperar
+ *  5. Vela 4h de confirmação: High > High anterior E Low > Low anterior
  */
 
 import {
@@ -12,8 +19,9 @@ import {
   updateOrCreateDailyStats,
   getSymbols,
 } from "../db";
-import { generateSignal, calcATR, Candle } from "./technicalAnalysis";
+import { calcATR, Candle } from "./technicalAnalysis";
 import { fetchCandles, fetchPrice, determineMacroTrend } from "./marketData";
+import { generateMtfSignal, MultiTimeframeData } from "./technicalAnalysisV3";
 import {
   sendTelegram,
   formatBuySignal,
@@ -25,10 +33,10 @@ import {
   formatStartupNotification,
 } from "./telegram";
 
-const SIGNAL_COOLDOWN = 90 * 60 * 1000; // 90 minutes
-const MONITOR_INTERVAL = 4 * 60 * 60 * 1000; // 4 hours
-const TRADE_CHECK_INTERVAL = 15 * 60 * 1000; // 15 minutes
-const DAILY_REPORT_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const SIGNAL_COOLDOWN = 90 * 60 * 1000;       // 90 minutos
+const MONITOR_INTERVAL = 4 * 60 * 60 * 1000;  // 4 horas
+const TRADE_CHECK_INTERVAL = 15 * 60 * 1000;  // 15 minutos
+const DAILY_REPORT_INTERVAL = 5 * 60 * 1000;  // 5 minutos
 
 interface LastSignalTracker {
   [symbol: string]: {
@@ -40,35 +48,30 @@ interface LastSignalTracker {
 
 const lastSignals: LastSignalTracker = {};
 
-/**
- * Initialize trading engine
- */
+// ---------------------------------------------------------------------------
+// Inicialização
+// ---------------------------------------------------------------------------
+
 export async function initializeEngine(): Promise<void> {
-  console.log("[Engine] Initializing trading engine...");
+  console.log("[Engine] Initializing trading engine (MTF V3)...");
 
   const symbols = await getSymbols();
   console.log(`[Engine] Loaded ${symbols.length} symbols for monitoring`);
 
-  // Initialize last signal tracker
   symbols.forEach((sym) => {
-    lastSignals[sym.symbol] = {
-      signal: null,
-      time: 0,
-      date: "",
-    };
+    lastSignals[sym.symbol] = { signal: null, time: 0, date: "" };
   });
 
-  // Send startup notification
   await sendTelegram(formatStartupNotification(symbols.length));
-
   console.log("[Engine] Trading engine initialized");
 }
 
-/**
- * Main trading loop - scan for new signals
- */
+// ---------------------------------------------------------------------------
+// Loop principal
+// ---------------------------------------------------------------------------
+
 export async function runTradingLoop(): Promise<void> {
-  console.log("[Engine] Running trading loop...");
+  console.log("[Engine] Running trading loop (MTF V3)...");
 
   const symbols = await getSymbols();
 
@@ -83,15 +86,17 @@ export async function runTradingLoop(): Promise<void> {
   console.log("[Engine] Trading loop completed");
 }
 
-/**
- * Process a single symbol for signal generation
- */
+// ---------------------------------------------------------------------------
+// Processamento de símbolo
+// ---------------------------------------------------------------------------
+
 async function processSymbol(symbol: string): Promise<void> {
   try {
-    // Fetch candles
-    const [dailyCandles, weeklyCandles] = await Promise.all([
-      fetchCandles(symbol, "1d", "2y"),
-      fetchCandles(symbol, "1wk", "5y"),
+    // Buscar candles nos três timeframes em paralelo
+    const [weeklyCandles, dailyCandles, h4Candles] = await Promise.all([
+      fetchCandles(symbol, "1wk", "5y"),   // Semanal — para RSI semanal
+      fetchCandles(symbol, "1d", "2y"),    // Diário  — para MA70
+      fetchCandles(symbol, "4h", "6mo"),   // 4 horas — para RSI, MACD e confirmação de vela
     ]);
 
     if (dailyCandles.length === 0) {
@@ -99,37 +104,45 @@ async function processSymbol(symbol: string): Promise<void> {
       return;
     }
 
-    const currentPrice = dailyCandles[dailyCandles.length - 1].close;
-    const macroTrend = determineMacroTrend(weeklyCandles);
+    // Montar estrutura multi-timeframe
+    const mtfData: MultiTimeframeData = {
+      weeklyCandles,
+      dailyCandles,
+      h4Candles,
+    };
 
-    // Calculate indicators
-    const atr = calcATR(dailyCandles, 14);
+    // Gerar sinal com filtros MTF V3
+    const result = generateMtfSignal(mtfData);
 
-    // Generate signal
-    const result = generateSignal(dailyCandles, currentPrice, macroTrend, "NEUTRAL", atr);
-
-    if (!result || result.confidence < 55) {
-      console.log(`[Engine] ${symbol}: No signal (conf=${result?.confidence || "N/A"})`);
+    if (!result) {
+      console.log(`[Engine] ${symbol}: No MTF signal`);
       return;
     }
 
-    // Check cooldown
+    if (result.confidence < 65) {
+      console.log(`[Engine] ${symbol}: Signal below confidence threshold (${result.confidence}%)`);
+      return;
+    }
+
+    // Verificar cooldown
     const now = Date.now();
-    const lastSignal = lastSignals[symbol];
+    const lastSignal = lastSignals[symbol] ?? { signal: null, time: 0, date: "" };
     if (lastSignal.signal === result.signal && now - lastSignal.time < SIGNAL_COOLDOWN) {
       console.log(`[Engine] ${symbol}: Cooldown active`);
       return;
     }
 
-    // Check daily limit
+    // Verificar limite diário
     const today = new Date().toISOString().slice(0, 10);
     if (lastSignal.date === today && lastSignal.signal === result.signal) {
       console.log(`[Engine] ${symbol}: Daily limit reached for ${result.signal}`);
       return;
     }
 
-    // Create trade
+    // Registar trade
     const tradeId = `${symbol}_${now}`;
+    const currentPrice = result.price;
+
     await createTrade({
       tradeId,
       symbol,
@@ -148,7 +161,6 @@ async function processSymbol(symbol: string): Promise<void> {
       outcome: "OPEN",
     });
 
-    // Create signal record
     await createSignal({
       symbol,
       signal: result.signal as "BUY" | "SELL",
@@ -160,14 +172,19 @@ async function processSymbol(symbol: string): Promise<void> {
       trendShort: result.trendShort,
     });
 
-    // Update tracker
-    lastSignals[symbol] = {
-      signal: result.signal,
-      time: now,
-      date: today,
-    };
+    // Atualizar tracker
+    lastSignals[symbol] = { signal: result.signal, time: now, date: today };
 
-    // Send notification
+    // Enviar notificação Telegram com detalhes MTF
+    const mtf = result.mtfFilters;
+    const mtfDetails =
+      `\n📊 *Filtros MTF:*` +
+      `\n• RSI Semanal: ${mtf.weeklyRsi} ${mtf.weeklyRsiOk ? "✅" : "❌"} (< 50)` +
+      `\n• Preço Diário vs MA70: ${mtf.dailyClose} vs ${mtf.dailyMa70} ${mtf.dailyAboveMa70 ? "✅" : "❌"}` +
+      `\n• RSI 4h: ${mtf.h4Rsi} ${mtf.h4RsiOk ? "✅" : "❌"} (< 40)` +
+      `\n• MACD Divergência Bullish: ${mtf.h4MacdBullishDivergence ? "✅" : "❌"}` +
+      `\n• Vela 4h HH+HL: ${mtf.h4CandleConfirmation ? "✅" : "❌"} (H:${mtf.h4HigherHigh ? "↑" : "↓"} L:${mtf.h4HigherLow ? "↑" : "↓"})`;
+
     const message =
       result.signal === "BUY"
         ? formatBuySignal(
@@ -184,7 +201,7 @@ async function processSymbol(symbol: string): Promise<void> {
             result.ema50,
             result.macroTrend,
             result.trendShort
-          )
+          ) + mtfDetails
         : formatSellSignal(
             symbol,
             currentPrice,
@@ -199,18 +216,23 @@ async function processSymbol(symbol: string): Promise<void> {
             result.ema50,
             result.macroTrend,
             result.trendShort
-          );
+          ) + mtfDetails;
 
     await sendTelegram(message);
-    console.log(`[Engine] ${symbol}: ${result.signal} signal generated (conf=${result.confidence}%)`);
+    console.log(
+      `[Engine] ${symbol}: BUY signal (MTF V3) conf=${result.confidence}% | ` +
+      `wRSI=${mtf.weeklyRsi} dMA70=${mtf.dailyAboveMa70} h4RSI=${mtf.h4Rsi} ` +
+      `MACDdiv=${mtf.h4MacdBullishDivergence} candle=${mtf.h4CandleConfirmation}`
+    );
   } catch (error) {
     console.error(`[Engine] Error processing ${symbol}:`, error);
   }
 }
 
-/**
- * Monitor active trades for TP/SL
- */
+// ---------------------------------------------------------------------------
+// Monitorização de trades ativos
+// ---------------------------------------------------------------------------
+
 export async function monitorActiveTrades(): Promise<void> {
   const trades = await getActiveTrades();
 
@@ -224,33 +246,31 @@ export async function monitorActiveTrades(): Promise<void> {
       if (trade.signal === "BUY") {
         const profitPct = ((price - Number(trade.entryPrice)) / Number(trade.entryPrice)) * 100;
 
-        // Breakeven at +1%
+        // Breakeven a +1%
         if (profitPct >= 1.0 && Number(trade.stopLoss) < Number(trade.entryPrice)) {
           const newSl = Number(trade.entryPrice) * 1.001;
           await updateTrade(trade.tradeId, { stopLoss: String(newSl) as any });
           await sendTelegram(formatBreakevenNotification(trade.symbol, newSl));
         }
-        // Trailing stop at +2%
+        // Trailing stop a +2%
         else if (profitPct >= 2.0 && Number(trade.stopLoss) < Number(trade.entryPrice) * 1.01) {
           const newSl = Number(trade.entryPrice) * 1.01;
           await updateTrade(trade.tradeId, { stopLoss: String(newSl) as any });
           await sendTelegram(formatTrailingStopNotification(trade.symbol, newSl));
         }
 
-        // Check SL
         if (price <= Number(trade.stopLoss)) {
           pnl = ((price - Number(trade.entryPrice)) / Number(trade.entryPrice)) * 100;
           outcome = pnl >= 0 ? "WIN" : "LOSS";
           closed = true;
         }
-        // Check TP
         if (price >= Number(trade.takeProfit)) {
           pnl = ((price - Number(trade.entryPrice)) / Number(trade.entryPrice)) * 100;
           outcome = "WIN";
           closed = true;
         }
       } else {
-        // SELL logic
+        // SELL
         const profitPct = ((Number(trade.entryPrice) - price) / Number(trade.entryPrice)) * 100;
 
         if (profitPct >= 1.0 && Number(trade.stopLoss) > Number(trade.entryPrice)) {
@@ -283,21 +303,18 @@ export async function monitorActiveTrades(): Promise<void> {
           closedAt: new Date(),
         });
 
-        // Update daily stats
         const today = new Date().toISOString().slice(0, 10);
         const stats = await getDailyStats(today);
         const wins = (stats?.wins || 0) + (outcome === "WIN" ? 1 : 0);
         const losses = (stats?.losses || 0) + (outcome === "LOSS" ? 1 : 0);
         const totalPnl = String((Number(stats?.totalPnl) || 0) + pnl) as any;
 
-        await updateOrCreateDailyStats(today, {
-          wins,
-          losses,
-          totalPnl,
-        });
+        await updateOrCreateDailyStats(today, { wins, losses, totalPnl });
 
         const winRate = wins + losses > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
-        await sendTelegram(formatTradeClosedNotification(trade.symbol, trade.signal, pnl, outcome, winRate, wins, losses));
+        await sendTelegram(
+          formatTradeClosedNotification(trade.symbol, trade.signal, pnl, outcome, winRate, wins, losses)
+        );
       }
     } catch (error) {
       console.error(`[Engine] Error monitoring ${trade.symbol}:`, error);
@@ -305,15 +322,16 @@ export async function monitorActiveTrades(): Promise<void> {
   }
 }
 
-/**
- * Send daily report
- */
+// ---------------------------------------------------------------------------
+// Relatório diário
+// ---------------------------------------------------------------------------
+
 export async function sendDailyReport(): Promise<void> {
   const now = new Date();
   const hours = now.getUTCHours();
   const minutes = now.getUTCMinutes();
 
-  // Send at 08:00 UTC (09:00 Lisbon)
+  // Enviar às 08:00 UTC (09:00 Lisboa)
   if (hours !== 8 || minutes > 5) return;
 
   const today = new Date().toISOString().slice(0, 10);
@@ -325,23 +343,22 @@ export async function sendDailyReport(): Promise<void> {
   const winRate = wins + losses > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
   const totalPnl = Number(stats?.totalPnl) || 0;
 
-  await sendTelegram(formatDailyReport(today, winRate, wins, losses, totalPnl, stats?.totalSignals || 0, trades.length));
+  await sendTelegram(
+    formatDailyReport(today, winRate, wins, losses, totalPnl, stats?.totalSignals || 0, trades.length)
+  );
 }
 
-/**
- * Start background loops
- */
+// ---------------------------------------------------------------------------
+// Loops em background
+// ---------------------------------------------------------------------------
+
 export function startBackgroundLoops(): void {
-  console.log("[Engine] Starting background loops...");
+  console.log("[Engine] Starting background loops (MTF V3)...");
 
-  // Trading loop - every 4 hours
   setInterval(runTradingLoop, MONITOR_INTERVAL);
-  runTradingLoop(); // Run immediately
+  runTradingLoop(); // Executar imediatamente
 
-  // Trade monitor - every 15 minutes
   setInterval(monitorActiveTrades, TRADE_CHECK_INTERVAL);
-
-  // Daily reporter - every 5 minutes
   setInterval(sendDailyReport, DAILY_REPORT_INTERVAL);
 
   console.log("[Engine] Background loops started");
