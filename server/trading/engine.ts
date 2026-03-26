@@ -86,6 +86,17 @@ export async function initializeEngine(): Promise<void> {
       { s: "GALP.LS", r: "PT", sec: "Energy" },
       { s: "BCP.LS", r: "PT", sec: "Financials" },
       { s: "NOS.LS", r: "PT", sec: "Communication Services" },
+      // Brasil (B3)
+      { s: "PETR4.SA", r: "BR", sec: "Energy" },
+      { s: "VALE3.SA", r: "BR", sec: "Materials" },
+      { s: "ITUB4.SA", r: "BR", sec: "Financials" },
+      { s: "BBDC4.SA", r: "BR", sec: "Financials" },
+      { s: "ABEV3.SA", r: "BR", sec: "Consumer Staples" },
+      { s: "BBAS3.SA", r: "BR", sec: "Financials" },
+      { s: "B3SA3.SA", r: "BR", sec: "Financials" },
+      { s: "RENT3.SA", r: "BR", sec: "Industrials" },
+      { s: "WEGE3.SA", r: "BR", sec: "Industrials" },
+      { s: "SUZB3.SA", r: "BR", sec: "Materials" },
     ];
     console.log(`[Engine] Adding ${defaultSymbols.length} default symbols...`);
     // Use Promise.all to add symbols faster

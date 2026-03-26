@@ -26,6 +26,12 @@ export default function Dashboard() {
       { symbol: "JMT.LS", sector: "Retail", region: "PT" },
       { symbol: "GALP.LS", sector: "Energy", region: "PT" },
       { symbol: "BCP.LS", sector: "Financial", region: "PT" },
+      // Brasil
+      { symbol: "PETR4.SA", sector: "Energy", region: "BR" },
+      { symbol: "VALE3.SA", sector: "Materials", region: "BR" },
+      { symbol: "ITUB4.SA", sector: "Financial", region: "BR" },
+      { symbol: "ABEV3.SA", sector: "Consumer", region: "BR" },
+      { symbol: "WEGE3.SA", sector: "Industrial", region: "BR" },
     ];
   }, [dbSymbols]);
 
