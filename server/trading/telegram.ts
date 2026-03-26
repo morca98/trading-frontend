@@ -170,19 +170,6 @@ ${symbol}
 ⏰ ${timestamp}`;
 }
 
-/**
- * Format breakeven activated notification
- */
-export function formatBreakevenNotification(symbol: string, newSl: number): string {
-  const timestamp = new Date().toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" });
-
-  return `🛡️ <b>Breakeven Ativado</b>
-
-${symbol}
-🛑 <b>Novo SL:</b> $${newSl.toFixed(2)}
-
-⏰ ${timestamp}`;
-}
 
 /**
  * Format daily report notification
@@ -231,7 +218,7 @@ export function formatStartupNotification(symbolCount: number): string {
 • Intervalo: Velas Diárias (1d)
 • Estratégia: EMA9/21 Crossover + ADX + RSI
 • TP/SL: Dinâmico (ATR-based)
-• Gestão de Risco: 1% por posição | R:R 1:3 | Trailing Stop + Breakeven
+	• Gestão de Risco: 1% por posição | R:R 1:3 | Trailing Stop 2%
 • Scan: A cada 4h | Verificação: A cada 15min
 
 ━━━━━━━━━━━━━━━━━━━━━━

@@ -138,7 +138,7 @@ export default function Home() {
               <div className="pt-4 border-t border-[#1a2535] space-y-2">
                 <div className="flex justify-between text-[9px]"><span className="text-[#4a6080]">Risco</span> <span className="text-[#00e676]">1% por posição</span></div>
                 <div className="flex justify-between text-[9px]"><span className="text-[#4a6080]">Target</span> <span className="text-[#c8d8f0]">R:R 1:3 fixo</span></div>
-                <div className="flex justify-between text-[9px]"><span className="text-[#4a6080]">Proteção</span> <span className="text-[#c8d8f0]">Trailing Stop + BE</span></div>
+                <div className="flex justify-between text-[9px]"><span className="text-[#4a6080]">Proteção</span> <span className="text-[#c8d8f0]">Trailing Stop 2%</span></div>
               </div>
             </div>
 

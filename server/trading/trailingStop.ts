@@ -6,7 +6,6 @@
 export interface TrailingStopConfig {
   enabled: boolean;
   trailingPct: number; // e.g., 2% trailing distance
-  breakEvenAfterProfitPct: number; // e.g., 1% profit triggers breakeven
   updateFrequency: number; // milliseconds between updates
 }
 
@@ -15,7 +14,6 @@ export interface TrailingStopState {
   currentSL: number;
   highestPrice?: number; // For BUY trades
   lowestPrice?: number; // For SELL trades
-  breakEvenTriggered: boolean;
   profitPct: number;
 }
 
@@ -39,13 +37,6 @@ export function calculateTrailingStopBUY(
   // Calculate profit percentage
   const profitPct = ((currentPrice - entryPrice) / entryPrice) * 100;
   newState.profitPct = profitPct;
-
-  // Trigger breakeven when profit reaches threshold
-  if (!state.breakEvenTriggered && profitPct >= config.breakEvenAfterProfitPct) {
-    newState.currentSL = entryPrice * 1.001; // Move SL just above entry (0.1% buffer)
-    newState.breakEvenTriggered = true;
-    console.log(`[Trailing Stop] Breakeven triggered at ${profitPct.toFixed(2)}% profit`);
-  }
 
   // Update trailing stop based on highest price
   if (newState.highestPrice) {
@@ -81,13 +72,6 @@ export function calculateTrailingStopSELL(
   // Calculate profit percentage
   const profitPct = ((entryPrice - currentPrice) / entryPrice) * 100;
   newState.profitPct = profitPct;
-
-  // Trigger breakeven when profit reaches threshold
-  if (!state.breakEvenTriggered && profitPct >= config.breakEvenAfterProfitPct) {
-    newState.currentSL = entryPrice * 0.999; // Move SL just below entry (0.1% buffer)
-    newState.breakEvenTriggered = true;
-    console.log(`[Trailing Stop] Breakeven triggered at ${profitPct.toFixed(2)}% profit`);
-  }
 
   // Update trailing stop based on lowest price
   if (newState.lowestPrice) {
@@ -136,7 +120,6 @@ export function checkTrailingStopExit(
 export const DEFAULT_TRAILING_STOP_CONFIG: TrailingStopConfig = {
   enabled: true,
   trailingPct: 2, // 2% trailing distance
-  breakEvenAfterProfitPct: 1, // Move to breakeven after 1% profit
   updateFrequency: 60000, // Update every minute
 };
 
@@ -153,7 +136,6 @@ export function createTrailingStopState(
     currentSL: initialSL,
     highestPrice: signal === "BUY" ? entryPrice : undefined,
     lowestPrice: signal === "SELL" ? entryPrice : undefined,
-    breakEvenTriggered: false,
     profitPct: 0,
   };
 }

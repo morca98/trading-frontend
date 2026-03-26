@@ -307,14 +307,8 @@ export async function monitorActiveTrades(): Promise<void> {
       if (trade.signal === "BUY") {
         const profitPct = ((price - Number(trade.entryPrice)) / Number(trade.entryPrice)) * 100;
 
-        // Breakeven a +1%
-        if (profitPct >= 1.0 && Number(trade.stopLoss) < Number(trade.entryPrice)) {
-          const newSl = Number(trade.entryPrice) * 1.001;
-          await updateTrade(trade.tradeId, { stopLoss: String(newSl) as any });
-          await sendTelegram(formatBreakevenNotification(trade.symbol, newSl));
-        }
         // Trailing stop a +2%
-        else if (profitPct >= 2.0 && Number(trade.stopLoss) < Number(trade.entryPrice) * 1.01) {
+        if (profitPct >= 2.0 && Number(trade.stopLoss) < Number(trade.entryPrice) * 1.01) {
           const newSl = Number(trade.entryPrice) * 1.01;
           await updateTrade(trade.tradeId, { stopLoss: String(newSl) as any });
           await sendTelegram(formatTrailingStopNotification(trade.symbol, newSl));
@@ -334,11 +328,7 @@ export async function monitorActiveTrades(): Promise<void> {
         // SELL
         const profitPct = ((Number(trade.entryPrice) - price) / Number(trade.entryPrice)) * 100;
 
-        if (profitPct >= 1.0 && Number(trade.stopLoss) > Number(trade.entryPrice)) {
-          const newSl = Number(trade.entryPrice) * 0.999;
-          await updateTrade(trade.tradeId, { stopLoss: String(newSl) as any });
-          await sendTelegram(formatBreakevenNotification(trade.symbol, newSl));
-        } else if (profitPct >= 2.0 && Number(trade.stopLoss) > Number(trade.entryPrice) * 0.99) {
+        if (profitPct >= 2.0 && Number(trade.stopLoss) > Number(trade.entryPrice) * 0.99) {
           const newSl = Number(trade.entryPrice) * 0.99;
           await updateTrade(trade.tradeId, { stopLoss: String(newSl) as any });
           await sendTelegram(formatTrailingStopNotification(trade.symbol, newSl));
