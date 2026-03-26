@@ -455,7 +455,8 @@ async function sendStartupMessage() {
     '━━━━━━━━━━━━━━━━━━━━━━\n' +
     '<b>Gestão de Risco:</b>\n' +
     '• SL: Abaixo da mínima da vela de confirmação (ATR-based, 0.8%–2.5%)\n' +
-    '• TP: R:R dinâmico baseado em ADX (2.5x – 3.5x)\n' +
+    '• TP: R:R fixo 1:3 (TP = SL × 3)\n' +
+    '• Risco por posição: 1% do capital\n' +
     '• Breakeven automático ao atingir +1% de lucro\n' +
     '• Trailing Stop ao atingir +2% de lucro\n' +
     '• Cooldown: 90 min entre sinais do mesmo símbolo\n' +

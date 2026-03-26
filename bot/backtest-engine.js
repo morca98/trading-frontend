@@ -87,7 +87,7 @@ class StockBacktestEngine {
     this.interval       = options.interval       || '1d';
     this.range          = options.range          || '2y';
     this.initialCapital = options.initialCapital || 10000;
-    this.riskPerTrade   = options.riskPerTrade   || 0.02;  // 2% do capital por trade
+    this.riskPerTrade   = options.riskPerTrade   || 0.01;  // 1% do capital por trade
     this.fee            = options.fee            || 0.001; // 0.1% comissão
     this.slippage       = options.slippage       || 0.001; // 0.1% slippage
 
@@ -207,7 +207,7 @@ class StockBacktestEngine {
       }
 
       if (outcome) {
-        var rrMultiplier = parseFloat(signalResult.tpPct) / parseFloat(signalResult.slPct) || 2.5;
+        var rrMultiplier = parseFloat(signalResult.tpPct) / parseFloat(signalResult.slPct) || 3.0;
         var pnlAmount    = this.capital * this.riskPerTrade * (outcome === 'WIN' ? rrMultiplier : -1);
         var feeAmount    = this.capital * this.fee * 2;
         var netPnl       = pnlAmount - feeAmount;

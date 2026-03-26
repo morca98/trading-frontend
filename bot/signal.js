@@ -348,9 +348,9 @@ function generateMtfSignal(data) {
   var finalSlPct   = Math.max(slPct, slPctActual);
   var sl           = price * (1 - finalSlPct);
 
-  // ADX para determinar o multiplicador R:R
+  // R:R fixo de 1:3 (risco 1%, retorno 3%)
   var adx          = calcADX(h4Candles, 14);
-  var rrMultiplier = adx > 35 ? 3.5 : adx > 25 ? 3.0 : 2.5;
+  var rrMultiplier = 3.0;
   var tp           = price * (1 + finalSlPct * rrMultiplier);
 
   // EMAs para contexto

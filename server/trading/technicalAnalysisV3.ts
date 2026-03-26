@@ -324,7 +324,7 @@ export function generateMtfSignal(
 
   const sl = price * (1 - finalSlPct);
 
-  // ADX para determinar o multiplicador R:R
+  // R:R fixo de 1:3 (risco 1%, retorno 3%)
   const h4Closes = h4Candles.map((c) => c.close);
   const adx = calcADX(h4Candles, 14);
   const rrMultiplier = 3.0; // Risco/Retorno fixo 1:3

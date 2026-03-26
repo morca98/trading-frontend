@@ -691,15 +691,14 @@ var tradingRouter = router({
 import { z as z3 } from "zod";
 
 // server/trading/technicalAnalysis.ts
-function calcEMALine(data, period) {
-  if (!data || data.length < period) return data.map(() => 0);
+function calcEMA(data, period) {
+  if (!data || data.length === 0) return 0;
   const k = 2 / (period + 1);
-  const result = new Array(data.length).fill(0);
-  result[period - 1] = data.slice(0, period).reduce((s, v) => s + v, 0) / period;
-  for (let i = period; i < data.length; i++) {
-    result[i] = data[i] * k + result[i - 1] * (1 - k);
+  let ema = data[0];
+  for (let i = 1; i < data.length; i++) {
+    ema = data[i] * k + ema * (1 - k);
   }
-  return result;
+  return ema;
 }
 function calcRSI(closes, period = 14) {
   if (closes.length < period + 1) return 50;
@@ -761,205 +760,211 @@ function calcADX(candles, period = 14) {
   }
   return adx;
 }
-function calcTrend(closes) {
-  if (closes.length < 10) return "NEUTRAL";
-  const current = closes[closes.length - 1];
-  const prev = closes[closes.length - 10];
-  return current > prev ? "BULL" : "BEAR";
-}
 
-// server/trading/technicalAnalysisV2.ts
-function calcAvgVolume(candles, period = 20) {
-  if (candles.length < period) return 0;
-  const recentVolumes = candles.slice(-period).map((c) => c.volume);
-  return recentVolumes.reduce((a, b) => a + b, 0) / period;
+// server/trading/technicalAnalysisV3.ts
+function calcSMA(data, period) {
+  if (data.length < period) return 0;
+  const slice = data.slice(-period);
+  return slice.reduce((a, b) => a + b, 0) / period;
 }
-function calcVolatility(candles, period = 20) {
-  if (candles.length < period) return 0;
-  const closes = candles.slice(-period).map((c) => c.close);
-  const returns = [];
-  for (let i = 1; i < closes.length; i++) {
-    returns.push((closes[i] - closes[i - 1]) / closes[i - 1]);
-  }
-  const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
-  const variance = returns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / returns.length;
-  return Math.sqrt(variance);
-}
-function detectCandlePattern(candle, prevCandle) {
-  const bodySize = Math.abs(candle.close - candle.open);
-  const totalSize = candle.high - candle.low;
-  const bodyRatio = bodySize / totalSize;
-  if (bodyRatio < 0.1) return "DOJI";
-  if (candle.close > candle.open && candle.open - candle.low > bodySize * 2) return "HAMMER";
-  if (candle.close < candle.open && candle.open - candle.low > bodySize * 2) return "HANGINGMAN";
-  if (candle.close > candle.open && prevCandle.close < prevCandle.open && candle.open < prevCandle.close && candle.close > prevCandle.open) {
-    return "BULLISH_ENGULFING";
-  }
-  if (candle.close < candle.open && prevCandle.close > prevCandle.open && candle.open > prevCandle.close && candle.close < prevCandle.open) {
-    return "BEARISH_ENGULFING";
-  }
-  if (candle.high === candle.close && candle.low === candle.open) return "MARUBOZU_UP";
-  if (candle.high === candle.open && candle.low === candle.close) return "MARUBOZU_DOWN";
-  return "NEUTRAL";
-}
-function calcStochasticRSI(closes, period = 14, smoothK = 3, smoothD = 3) {
-  if (closes.length < period + smoothK + smoothD) return { k: 50, d: 50 };
-  const rsiValues = [];
-  for (let i = period; i < closes.length; i++) {
-    let gains = 0, losses = 0;
-    for (let j = i - period; j < i; j++) {
-      const diff = closes[j] - closes[j - 1];
-      if (diff > 0) gains += diff;
-      else losses -= diff;
-    }
-    const avgGain = gains / period, avgLoss = losses / period;
-    const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
-    const rsi = 100 - 100 / (1 + rs);
-    rsiValues.push(rsi);
-  }
-  const lookback = 14;
-  const minRSI = Math.min(...rsiValues.slice(-lookback));
-  const maxRSI = Math.max(...rsiValues.slice(-lookback));
-  const currentRSI = rsiValues[rsiValues.length - 1];
-  let k = maxRSI === minRSI ? 50 : (currentRSI - minRSI) / (maxRSI - minRSI) * 100;
-  const kValues = [];
-  for (let i = Math.max(0, rsiValues.length - lookback); i < rsiValues.length; i++) {
-    const rsi = rsiValues[i];
-    const minR = Math.min(...rsiValues.slice(Math.max(0, i - 14), i + 1));
-    const maxR = Math.max(...rsiValues.slice(Math.max(0, i - 14), i + 1));
-    kValues.push(maxR === minR ? 50 : (rsi - minR) / (maxR - minR) * 100);
-  }
-  if (kValues.length >= smoothK) {
-    k = kValues.slice(-smoothK).reduce((a, b) => a + b, 0) / smoothK;
-  }
-  let d = 50;
-  if (kValues.length >= smoothK + smoothD) {
-    const dValues = kValues.slice(-smoothK - smoothD);
-    d = dValues.reduce((a, b) => a + b, 0) / smoothD;
-  }
-  return { k: Math.round(k * 100) / 100, d: Math.round(d * 100) / 100 };
-}
-function calcMACD(closes) {
-  if (closes.length < 26) return { macd: 0, signal: 0, histogram: 0 };
+function calcMACDLine(closes) {
+  const len = closes.length;
+  const macdLine = new Array(len).fill(0);
+  const signalLine = new Array(len).fill(0);
+  const histogram = new Array(len).fill(0);
+  if (len < 35) return { macdLine, signalLine, histogram };
   const k12 = 2 / (12 + 1);
   const k26 = 2 / (26 + 1);
+  const k9 = 2 / (9 + 1);
   let ema12 = closes[0];
   let ema26 = closes[0];
-  for (let i = 1; i < closes.length; i++) {
-    ema12 = closes[i] * k12 + ema12 * (1 - k12);
-    ema26 = closes[i] * k26 + ema26 * (1 - k26);
+  const ema12Arr = new Array(len).fill(0);
+  const ema26Arr = new Array(len).fill(0);
+  ema12Arr[0] = closes[0];
+  ema26Arr[0] = closes[0];
+  for (let i = 1; i < len; i++) {
+    ema12Arr[i] = closes[i] * k12 + ema12Arr[i - 1] * (1 - k12);
+    ema26Arr[i] = closes[i] * k26 + ema26Arr[i - 1] * (1 - k26);
+    macdLine[i] = ema12Arr[i] - ema26Arr[i];
   }
-  const macd = ema12 - ema26;
-  const k9 = 2 / (9 + 1);
-  let signal = macd;
-  signal = macd;
+  signalLine[25] = macdLine[25];
+  for (let i = 26; i < len; i++) {
+    signalLine[i] = macdLine[i] * k9 + signalLine[i - 1] * (1 - k9);
+    histogram[i] = macdLine[i] - signalLine[i];
+  }
+  return { macdLine, signalLine, histogram };
+}
+function detectMacdBullishDivergence(candles, histogram, lookback = 20) {
+  const len = candles.length;
+  if (len < lookback + 2 || histogram.length < len) return false;
+  const startIdx = len - lookback;
+  let priceLowIdx = startIdx;
+  for (let i = startIdx + 1; i < len - 1; i++) {
+    if (candles[i].low < candles[priceLowIdx].low) {
+      priceLowIdx = i;
+    }
+  }
+  const lastLow = candles[len - 1].low;
+  const prevLow = candles[priceLowIdx].low;
+  if (lastLow >= prevLow) return false;
+  const lastHist = histogram[len - 1];
+  const prevHist = histogram[priceLowIdx];
+  return lastHist > prevHist;
+}
+function evaluateMtfFilters(data) {
+  const { weeklyCandles, dailyCandles, h4Candles } = data;
+  const weeklyCloses = weeklyCandles.map((c) => c.close);
+  const weeklyRsi = weeklyCloses.length >= 15 ? calcRSI(weeklyCloses, 14) : 50;
+  const weeklyRsiOk = weeklyRsi < 50;
+  const dailyCloses = dailyCandles.map((c) => c.close);
+  const dailyClose = dailyCloses[dailyCloses.length - 1] ?? 0;
+  const dailyMa70 = calcSMA(dailyCloses, 70);
+  const dailyAboveMa70 = dailyMa70 > 0 && dailyClose > dailyMa70;
+  const h4Closes = h4Candles.map((c) => c.close);
+  const h4Rsi = h4Closes.length >= 15 ? calcRSI(h4Closes, 14) : 50;
+  const h4RsiOk = h4Rsi < 40;
+  const { macdLine, signalLine, histogram } = calcMACDLine(h4Closes);
+  const lastIdx = h4Closes.length - 1;
+  const h4Macd = macdLine[lastIdx] ?? 0;
+  const h4MacdSignal = signalLine[lastIdx] ?? 0;
+  const h4MacdHistogram = histogram[lastIdx] ?? 0;
+  const h4MacdBullishDivergence = detectMacdBullishDivergence(h4Candles, histogram, 20);
+  const h4Len = h4Candles.length;
+  let h4HigherHigh = false;
+  let h4HigherLow = false;
+  if (h4Len >= 2) {
+    const lastCandle = h4Candles[h4Len - 1];
+    const prevCandle = h4Candles[h4Len - 2];
+    h4HigherHigh = lastCandle.high > prevCandle.high;
+    h4HigherLow = lastCandle.low > prevCandle.low;
+  }
+  const h4CandleConfirmation = h4HigherHigh && h4HigherLow;
+  const allFiltersPass = weeklyRsiOk && dailyAboveMa70 && h4RsiOk && h4MacdBullishDivergence && h4CandleConfirmation;
   return {
-    macd: Math.round(macd * 1e4) / 1e4,
-    signal: Math.round(signal * 1e4) / 1e4,
-    histogram: Math.round((macd - signal) * 1e4) / 1e4
+    weeklyRsi: Math.round(weeklyRsi * 100) / 100,
+    weeklyRsiOk,
+    dailyClose: Math.round(dailyClose * 100) / 100,
+    dailyMa70: Math.round(dailyMa70 * 100) / 100,
+    dailyAboveMa70,
+    h4Rsi: Math.round(h4Rsi * 100) / 100,
+    h4RsiOk,
+    h4MacdBullishDivergence,
+    h4Macd: Math.round(h4Macd * 1e4) / 1e4,
+    h4MacdSignal: Math.round(h4MacdSignal * 1e4) / 1e4,
+    h4MacdHistogram: Math.round(h4MacdHistogram * 1e4) / 1e4,
+    h4HigherHigh,
+    h4HigherLow,
+    h4CandleConfirmation,
+    allFiltersPass
   };
 }
-function generateEnhancedSignal(candles, price, macroTrend, trendShort, atr) {
-  if (candles.length < 100) return null;
-  const closes = candles.map((c) => c.close);
-  const rsi = calcRSI(closes);
-  const adx = calcADX(candles);
-  const stochRSI = calcStochasticRSI(closes);
-  const macd = calcMACD(closes);
-  const avgVolume = calcAvgVolume(candles);
-  const volatility = calcVolatility(candles);
-  const ema9Line = calcEMALine(closes, 9);
-  const ema21Line = calcEMALine(closes, 21);
-  const ema50Line = calcEMALine(closes, 50);
-  const ema200Line = calcEMALine(closes, 200);
-  const len = ema9Line.length;
-  if (len < 3) return null;
-  const ema9 = ema9Line[len - 1];
-  const ema21 = ema21Line[len - 1];
-  const ema50 = ema50Line[len - 1];
-  const ema200 = ema200Line[len - 1];
-  const ema9PrevAbove = ema9Line[len - 2] > ema21Line[len - 2];
-  const ema9CurrAbove = ema9 > ema21;
-  const crossedUp = !ema9PrevAbove && ema9CurrAbove;
-  const crossedDown = ema9PrevAbove && !ema9CurrAbove;
-  const currentVolume = candles[candles.length - 1].volume;
-  const volHigh = currentVolume > avgVolume * 1.3;
-  const prevCandle = candles[candles.length - 2];
-  const pattern = detectCandlePattern(candles[candles.length - 1], prevCandle);
-  const filters = {
-    adxFilter: adx >= 25,
-    volumeFilter: volHigh,
-    rsiFilter: rsi > 30 && rsi < 70,
-    trendFilter: macroTrend === "BULL" || macroTrend === "BEAR",
-    candleConfirmation: pattern !== "NEUTRAL",
-    emaDistanceFilter: Math.abs(price - ema21) / price < 0.015,
-    volatilityFilter: volatility > 5e-3 && volatility < 0.08
-  };
-  const filterScore = Object.values(filters).filter(Boolean).length / Object.keys(filters).length;
-  if (filterScore < 0.6) return null;
-  if (!filters.adxFilter) return null;
-  if (!filters.rsiFilter) return null;
-  if (!filters.volumeFilter) return null;
-  let signal = null;
-  if (crossedUp && ema21 > ema50 && ema50 > ema200 && macroTrend !== "BEAR") {
-    if (stochRSI.k < 80 && macd.histogram > 0) {
-      signal = "BUY";
-    }
+function generateMtfSignal(data) {
+  const { dailyCandles, h4Candles } = data;
+  if (data.weeklyCandles.length < 20 || dailyCandles.length < 80 || h4Candles.length < 60) {
+    return null;
   }
-  if (!signal && crossedDown && ema21 < ema50 && ema50 < ema200 && macroTrend !== "BULL") {
-    if (stochRSI.k > 20 && macd.histogram < 0) {
-      signal = "SELL";
-    }
-  }
-  if (signal === "BUY") {
-    if (rsi > 65) return null;
-    if (price < ema50 * 0.95) return null;
-    if (pattern === "BEARISH_ENGULFING" || pattern === "HANGINGMAN") return null;
-  }
-  if (signal === "SELL") {
-    if (rsi < 35) return null;
-    if (price > ema50 * 1.05) return null;
-    if (pattern === "BULLISH_ENGULFING" || pattern === "HAMMER") return null;
-  }
-  if (!signal) return null;
+  const mtfFilters = evaluateMtfFilters(data);
+  const filterChecks = [
+    mtfFilters.weeklyRsiOk,
+    mtfFilters.dailyAboveMa70,
+    mtfFilters.h4RsiOk,
+    mtfFilters.h4MacdBullishDivergence,
+    mtfFilters.h4CandleConfirmation
+  ];
+  const filterScore = Math.round(
+    filterChecks.filter(Boolean).length / filterChecks.length * 100
+  );
+  if (!mtfFilters.allFiltersPass) return null;
+  const lastH4 = h4Candles[h4Candles.length - 1];
+  const prevH4 = h4Candles[h4Candles.length - 2];
+  const price = lastH4.close;
+  const atr = calcATR(h4Candles, 14);
   const atrPct = atr / price;
-  const slPct = Math.max(8e-3, Math.min(0.02, atrPct * 1.5));
-  const sl = signal === "BUY" ? price * (1 - slPct) : price * (1 + slPct);
-  const rrMultiplier = adx > 35 ? 3.5 : adx > 30 ? 3 : 2.5;
-  const tp = signal === "BUY" ? price * (1 + slPct * rrMultiplier) : price * (1 - slPct * rrMultiplier);
-  let confidence = 60;
-  confidence += (adx - 25) * 0.5;
-  confidence += filterScore * 10;
-  if (stochRSI.k < 20 || stochRSI.k > 80) confidence += 5;
-  if (macd.histogram > 0 && signal === "BUY") confidence += 3;
-  if (macd.histogram < 0 && signal === "SELL") confidence += 3;
-  if (pattern !== "NEUTRAL") confidence += 2;
+  const slPct = Math.max(8e-3, Math.min(0.025, atrPct * 1.5));
+  const slPrice = Math.min(prevH4.low, lastH4.low) * (1 - 1e-3);
+  const slPctActual = (price - slPrice) / price;
+  const finalSlPct = Math.max(slPct, slPctActual);
+  const sl = price * (1 - finalSlPct);
+  const h4Closes = h4Candles.map((c) => c.close);
+  const adx = calcADX(h4Candles, 14);
+  const rrMultiplier = 3;
+  const tp = price * (1 + finalSlPct * rrMultiplier);
+  const dailyCloses = dailyCandles.map((c) => c.close);
+  const ema9 = calcEMA(h4Closes.slice(-50), 9);
+  const ema21 = calcEMA(h4Closes.slice(-50), 21);
+  const ema50 = calcEMA(dailyCloses.slice(-100), 50);
+  const ema200 = dailyCloses.length >= 200 ? calcEMA(dailyCloses.slice(-200), 200) : ema50;
+  const rsi = mtfFilters.h4Rsi;
+  let confidence = 65;
+  confidence += (adx - 20) * 0.5;
+  if (mtfFilters.weeklyRsi < 40) confidence += 5;
+  if (mtfFilters.h4Rsi < 30) confidence += 5;
+  if (mtfFilters.h4MacdBullishDivergence) confidence += 5;
   confidence = Math.min(99, Math.round(confidence));
-  const signalStrength = (filterScore * 0.4 + adx / 50 * 0.3 + confidence / 100 * 0.3) * 100;
   return {
-    signal,
+    signal: "BUY",
     confidence,
     price,
-    sl,
-    tp,
+    sl: Math.round(sl * 100) / 100,
+    tp: Math.round(tp * 100) / 100,
+    slPct: Math.round(finalSlPct * 1e4) / 100,
+    tpPct: Math.round(finalSlPct * rrMultiplier * 1e4) / 100,
     rsi: Math.round(rsi * 100) / 100,
+    adx: Math.round(adx * 100) / 100,
+    atr: Math.round(atr * 100) / 100,
     ema9: Math.round(ema9 * 100) / 100,
     ema21: Math.round(ema21 * 100) / 100,
     ema50: Math.round(ema50 * 100) / 100,
     ema200: Math.round(ema200 * 100) / 100,
-    macroTrend,
-    trendShort,
-    adx: Math.round(adx * 100) / 100,
-    atr: Math.round(atr * 100) / 100,
-    slPct: Math.round(slPct * 1e4) / 100,
-    tpPct: Math.round(slPct * rrMultiplier * 1e4) / 100,
-    filters,
-    filterScore: Math.round(filterScore * 1e4) / 100,
-    signalStrength: Math.round(signalStrength)
+    macroTrend: "BULL",
+    trendShort: "BULL",
+    mtfFilters,
+    filterScore
   };
 }
 
 // server/trading/backtest.ts
+function buildWeeklyCandles(dailyCandles) {
+  const weekly = [];
+  for (let i = 0; i < dailyCandles.length; i += 5) {
+    const chunk = dailyCandles.slice(i, i + 5);
+    if (chunk.length === 0) continue;
+    weekly.push({
+      time: chunk[0].time,
+      open: chunk[0].open,
+      high: Math.max(...chunk.map((c) => c.high)),
+      low: Math.min(...chunk.map((c) => c.low)),
+      close: chunk[chunk.length - 1].close,
+      volume: chunk.reduce((s, c) => s + c.volume, 0)
+    });
+  }
+  return weekly;
+}
+function buildH4Candles(dailyCandles) {
+  const h4 = [];
+  const h4ms = 4 * 60 * 60 * 1e3;
+  for (const d of dailyCandles) {
+    const range = d.high - d.low;
+    const volPerBar = d.volume / 6;
+    for (let j = 0; j < 6; j++) {
+      const t2 = d.time + j * h4ms;
+      const frac = j / 5;
+      const midClose = d.open + (d.close - d.open) * ((j + 1) / 6);
+      const midOpen = d.open + (d.close - d.open) * (j / 6);
+      const subHigh = midClose + range * 0.1 * (1 - frac);
+      const subLow = midOpen - range * 0.1 * frac;
+      h4.push({
+        time: t2,
+        open: midOpen,
+        high: Math.max(midOpen, midClose, subHigh),
+        low: Math.min(midOpen, midClose, subLow),
+        close: midClose,
+        volume: volPerBar
+      });
+    }
+  }
+  return h4;
+}
 async function runBacktest(symbol, candles, startDate, endDate) {
   if (candles.length < 200) {
     throw new Error("Insufficient data for backtest (minimum 200 candles required)");
@@ -973,14 +978,20 @@ async function runBacktest(symbol, candles, startDate, endDate) {
   const equityCurve = [];
   let equity = 1e4;
   const tradeIds = /* @__PURE__ */ new Set();
+  const allWeeklyCandles = buildWeeklyCandles(testCandles);
+  const allH4Candles = buildH4Candles(testCandles);
   for (let i = 100; i < testCandles.length; i++) {
-    const currentCandles = testCandles.slice(Math.max(0, i - 100), i + 1);
     const currentPrice = testCandles[i].close;
-    const atr = calcATR(currentCandles);
-    const weeklyCandles = testCandles.slice(Math.max(0, i - 50), i + 1);
-    const macroTrend = calcTrend(weeklyCandles.map((c) => c.close));
-    const trendShort = calcTrend(currentCandles.slice(-10).map((c) => c.close));
-    const signalResult = generateEnhancedSignal(currentCandles, currentPrice, macroTrend, trendShort, atr);
+    const dailyWindow = testCandles.slice(Math.max(0, i - 100), i + 1);
+    const weeklyWindow = allWeeklyCandles.slice(0, Math.ceil((i + 1) / 5));
+    const h4Window = allH4Candles.slice(0, (i + 1) * 6);
+    const mtfData = {
+      weeklyCandles: weeklyWindow.slice(-30),
+      dailyCandles: dailyWindow,
+      h4Candles: h4Window.slice(-120)
+      // últimas 120 velas de 4h (~20 dias)
+    };
+    const signalResult = generateMtfSignal(mtfData);
     if (activeTradeIndex >= 0) {
       const activeTrade = trades2[activeTradeIndex];
       let shouldClose = false;
@@ -1017,6 +1028,7 @@ async function runBacktest(symbol, candles, startDate, endDate) {
     if (signalResult && activeTradeIndex < 0) {
       const tradeId = `${symbol}_${testCandles[i].time}`;
       if (!tradeIds.has(tradeId)) {
+        const mtf = signalResult.mtfFilters;
         const trade = {
           id: tradeId,
           symbol,
@@ -1031,7 +1043,14 @@ async function runBacktest(symbol, candles, startDate, endDate) {
           pnl: 0,
           pnlPct: 0,
           duration: 0,
-          confidence: signalResult.confidence
+          confidence: signalResult.confidence,
+          mtfSnapshot: {
+            weeklyRsi: mtf.weeklyRsi,
+            dailyMa70: mtf.dailyMa70,
+            h4Rsi: mtf.h4Rsi,
+            h4MacdBullishDivergence: mtf.h4MacdBullishDivergence,
+            h4CandleConfirmation: mtf.h4CandleConfirmation
+          }
         };
         trades2.push(trade);
         activeTradeIndex = trades2.length - 1;
@@ -1057,21 +1076,21 @@ function calculateMetrics(trades2, equityCurve, finalEquity) {
   const totalPnLPct = totalPnL / 1e4 * 100;
   let maxDrawdown = 0;
   let peak = equityCurve[0] || 1e4;
-  for (const equity of equityCurve) {
-    if (equity > peak) peak = equity;
-    const drawdown = (peak - equity) / peak * 100;
-    if (drawdown > maxDrawdown) maxDrawdown = drawdown;
+  for (const eq2 of equityCurve) {
+    if (eq2 > peak) peak = eq2;
+    const dd = (peak - eq2) / peak * 100;
+    if (dd > maxDrawdown) maxDrawdown = dd;
   }
   const returns = [];
   for (let i = 1; i < equityCurve.length; i++) {
     returns.push((equityCurve[i] - equityCurve[i - 1]) / equityCurve[i - 1]);
   }
-  const avgReturn = returns.reduce((a, b) => a + b, 0) / returns.length;
-  const variance = returns.reduce((a, b) => a + Math.pow(b - avgReturn, 2), 0) / returns.length;
+  const avgReturn = returns.reduce((a, b) => a + b, 0) / (returns.length || 1);
+  const variance = returns.reduce((a, b) => a + Math.pow(b - avgReturn, 2), 0) / (returns.length || 1);
   const stdDev = Math.sqrt(variance);
   const sharpeRatio = stdDev > 0 ? avgReturn / stdDev * Math.sqrt(252) : 0;
   const downReturns = returns.filter((r) => r < 0);
-  const downVariance = downReturns.reduce((a, b) => a + Math.pow(b, 2), 0) / returns.length;
+  const downVariance = downReturns.reduce((a, b) => a + Math.pow(b, 2), 0) / (returns.length || 1);
   const downStdDev = Math.sqrt(downVariance);
   const sortino = downStdDev > 0 ? avgReturn / downStdDev * Math.sqrt(252) : 0;
   const avgDuration = closedTrades.length > 0 ? closedTrades.reduce((sum, t2) => sum + t2.duration, 0) / closedTrades.length : 0;

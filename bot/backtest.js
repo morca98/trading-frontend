@@ -20,7 +20,7 @@ async function runBacktest(symbol) {
     interval:       '1d',
     range:          '2y',
     initialCapital: 10000,
-    riskPerTrade:   0.02,   // 2% do capital por trade
+    riskPerTrade:   0.01,   // 1% do capital por trade
     fee:            0.001,  // 0.1% comissão
     slippage:       0.001,  // 0.1% slippage
   });
@@ -76,7 +76,7 @@ async function main() {
 
   console.log('\n🔬 STOCK SIGNAL BOT – BACKTEST MTF V3 (2 ANOS)');
   console.log('Símbolos: ' + symbols.join(', '));
-  console.log('Capital inicial: $10,000 | Risco/trade: 2% | Comissão: 0.1%');
+  console.log('Capital inicial: $10,000 | Risco/trade: 1% | R:R: 1:3 | Comissão: 0.1%');
   console.log('');
 
   var allResults = [];

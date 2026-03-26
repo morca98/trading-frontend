@@ -1,21 +1,23 @@
 FROM node:20-alpine
-
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json* pnpm-lock.yaml* ./
+# Instalar pnpm globalmente
+RUN npm install -g pnpm@10.4.1
 
-# Install dependencies using npm
-RUN npm install --legacy-peer-deps
+# Copiar ficheiros de dependências
+COPY package.json pnpm-lock.yaml ./
 
-# Copy application code
+# Instalar dependências com pnpm (frozen lockfile para reprodutibilidade)
+RUN pnpm install --frozen-lockfile
+
+# Copiar o restante do código
 COPY . .
 
-# Build the application
-RUN npm run build || true
+# Fazer build (vite + esbuild → dist/index.js)
+RUN pnpm run build
 
-# Expose port
+# Expor porta
 EXPOSE 3000
 
-# Start the application
-CMD ["npm", "start"]
+# Iniciar o servidor
+CMD ["node", "dist/index.js"]
