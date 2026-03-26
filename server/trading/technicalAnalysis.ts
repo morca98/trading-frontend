@@ -234,7 +234,7 @@ export function generateSignal(
 
   const sl = signal === "BUY" ? price * (1 - slPct) : price * (1 + slPct);
 
-  const rrMultiplier = adx > 30 ? 3.0 : adx > 25 ? 2.5 : 2.0;
+  const rrMultiplier = 3.0; // Risco/Retorno fixo 1:3
   const tp = signal === "BUY" ? price * (1 + slPct * rrMultiplier) : price * (1 - slPct * rrMultiplier);
 
   const conf = Math.min(99, Math.round(55 + (adx - 20) * 1.5 + (volHigh ? 5 : 0)));

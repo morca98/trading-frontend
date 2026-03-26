@@ -143,7 +143,7 @@ export function generateBacktestSignal(
   const slPct = Math.max(0.01, Math.min(0.03, atrPct * 1.2));
 
   const sl = signal === "BUY" ? currentPrice * (1 - slPct) : currentPrice * (1 + slPct);
-  const rrMultiplier = adx > 30 ? 2.5 : 2.0;
+  const rrMultiplier = 3.0; // Risco/Retorno fixo 1:3
   const tp = signal === "BUY" ? currentPrice * (1 + slPct * rrMultiplier) : currentPrice * (1 - slPct * rrMultiplier);
 
   // Confidence calculation

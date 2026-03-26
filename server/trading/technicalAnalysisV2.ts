@@ -279,7 +279,7 @@ export function generateEnhancedSignal(
 
   const sl = signal === "BUY" ? price * (1 - slPct) : price * (1 + slPct);
 
-  const rrMultiplier = adx > 35 ? 3.5 : adx > 30 ? 3.0 : 2.5;
+  const rrMultiplier = 3.0; // Risco/Retorno fixo 1:3
   const tp = signal === "BUY" ? price * (1 + slPct * rrMultiplier) : price * (1 - slPct * rrMultiplier);
 
   // Enhanced confidence calculation

@@ -327,7 +327,7 @@ export function generateMtfSignal(
   // ADX para determinar o multiplicador R:R
   const h4Closes = h4Candles.map((c) => c.close);
   const adx = calcADX(h4Candles, 14);
-  const rrMultiplier = adx > 35 ? 3.5 : adx > 25 ? 3.0 : 2.5;
+  const rrMultiplier = 3.0; // Risco/Retorno fixo 1:3
   const tp = price * (1 + finalSlPct * rrMultiplier);
 
   // EMAs para contexto

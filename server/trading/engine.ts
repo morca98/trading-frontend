@@ -37,6 +37,7 @@ const SIGNAL_COOLDOWN = 90 * 60 * 1000;       // 90 minutos
 const MONITOR_INTERVAL = 4 * 60 * 60 * 1000;  // 4 horas
 const TRADE_CHECK_INTERVAL = 15 * 60 * 1000;  // 15 minutos
 const DAILY_REPORT_INTERVAL = 5 * 60 * 1000;  // 5 minutos
+const RISK_PER_TRADE = 0.01;                   // 1% de risco por posição
 
 interface LastSignalTracker {
   [symbol: string]: {
