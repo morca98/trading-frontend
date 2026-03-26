@@ -6,6 +6,8 @@ import {
   getDailyStats,
   getSymbols,
   addSymbol,
+  removeSymbol,
+  toggleSymbol,
 } from "../db";
 
 export const tradingRouter = router({
@@ -66,5 +68,19 @@ export const tradingRouter = router({
       return { success: true, symbol: input.symbol };
     }),
 
+  // Remove symbol from monitoring
+  removeSymbol: publicProcedure
+    .input(z.object({ symbol: z.string() }))
+    .mutation(async ({ input }) => {
+      await removeSymbol(input.symbol);
+      return { success: true, symbol: input.symbol };
+    }),
 
+  // Enable/disable symbol without deleting
+  toggleSymbol: publicProcedure
+    .input(z.object({ symbol: z.string(), enabled: z.boolean() }))
+    .mutation(async ({ input }) => {
+      await toggleSymbol(input.symbol, input.enabled);
+      return { success: true, symbol: input.symbol, enabled: input.enabled };
+    }),
 });

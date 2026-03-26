@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { TickerManager } from "../components/TickerManager";
 import { 
   TrendingUp, 
   History, 
@@ -33,7 +34,7 @@ import {
 } from "recharts";
 
 export default function Dashboard() {
-  const [activeTab, setActiveTab] = useState<"trades" | "history" | "assets">("trades");
+  const [activeTab, setActiveTab] = useState<"trades" | "history" | "assets" | "tickers">("trades");
   const [searchTerm, setSearchTerm] = useState("");
 
   const { data: dbSymbols, isLoading: symbolsLoading, error: symbolsError } = trpc.trading.getSymbols.useQuery();
@@ -334,6 +335,14 @@ export default function Dashboard() {
               <Globe className="w-3 h-3 mr-2" />
               Ativos Monitorizados
             </Button>
+            <Button 
+              variant="ghost" 
+              className={`text-[10px] uppercase tracking-widest h-8 px-4 rounded-none ${activeTab === "tickers" ? "bg-[#00d4ff] text-[#080c12]" : "text-[#4a6080]"}`}
+              onClick={() => setActiveTab("tickers")}
+            >
+              <Zap className="w-3 h-3 mr-2" />
+              Gerir Tickers
+            </Button>
           </div>
         </div>
 
@@ -548,11 +557,17 @@ export default function Dashboard() {
                       )}
                     </tbody>
                   </table>
-                </div>
+                 </div>
+              </div>
+            )}
+
+            {/* Tab: Gerir Tickers */}
+            {activeTab === "tickers" && (
+              <div className="lg:col-span-12">
+                <TickerManager />
               </div>
             )}
           </div>
-
           {/* Sidebar Info */}
           <div className="lg:col-span-4 space-y-6">
             {/* Stats Cards */}

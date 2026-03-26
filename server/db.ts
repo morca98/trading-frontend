@@ -225,6 +225,30 @@ export async function getSymbols(): Promise<Symbol[]> {
   }
 }
 
+export async function removeSymbol(symbolStr: string): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.delete(symbols).where(eq(symbols.symbol, symbolStr));
+    console.log(`[Database] Symbol ${symbolStr} removed.`);
+  } catch (error) {
+    console.error(`[Database] Failed to remove symbol ${symbolStr}:`, error);
+    throw error;
+  }
+}
+
+export async function toggleSymbol(symbolStr: string, enabled: boolean): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.update(symbols).set({ enabled: enabled ? 1 : 0 }).where(eq(symbols.symbol, symbolStr));
+    console.log(`[Database] Symbol ${symbolStr} ${enabled ? 'enabled' : 'disabled'}.`);
+  } catch (error) {
+    console.error(`[Database] Failed to toggle symbol ${symbolStr}:`, error);
+    throw error;
+  }
+}
+
 export async function addSymbol(symbol: string, region: string = "US", sector: string = "Technology"): Promise<void> {
   const db = await getDb();
   if (!db) return;

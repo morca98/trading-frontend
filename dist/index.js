@@ -128,6 +128,8 @@ __export(db_exports, {
   getSignalsBySymbol: () => getSignalsBySymbol,
   getSymbols: () => getSymbols,
   getUserByOpenId: () => getUserByOpenId,
+  removeSymbol: () => removeSymbol,
+  toggleSymbol: () => toggleSymbol,
   updateOrCreateDailyStats: () => updateOrCreateDailyStats,
   updateTrade: () => updateTrade,
   upsertUser: () => upsertUser
@@ -322,6 +324,28 @@ async function getSymbols() {
     }
     console.error("[Database] Failed to get symbols:", error);
     return [];
+  }
+}
+async function removeSymbol(symbolStr) {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.delete(symbols).where(eq(symbols.symbol, symbolStr));
+    console.log(`[Database] Symbol ${symbolStr} removed.`);
+  } catch (error) {
+    console.error(`[Database] Failed to remove symbol ${symbolStr}:`, error);
+    throw error;
+  }
+}
+async function toggleSymbol(symbolStr, enabled) {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.update(symbols).set({ enabled: enabled ? 1 : 0 }).where(eq(symbols.symbol, symbolStr));
+    console.log(`[Database] Symbol ${symbolStr} ${enabled ? "enabled" : "disabled"}.`);
+  } catch (error) {
+    console.error(`[Database] Failed to toggle symbol ${symbolStr}:`, error);
+    throw error;
   }
 }
 async function addSymbol(symbol, region = "US", sector = "Technology") {
@@ -1019,6 +1043,16 @@ var tradingRouter = router({
   ).mutation(async ({ input }) => {
     await addSymbol(input.symbol, input.region, input.sector);
     return { success: true, symbol: input.symbol };
+  }),
+  // Remove symbol from monitoring
+  removeSymbol: publicProcedure.input(z2.object({ symbol: z2.string() })).mutation(async ({ input }) => {
+    await removeSymbol(input.symbol);
+    return { success: true, symbol: input.symbol };
+  }),
+  // Enable/disable symbol without deleting
+  toggleSymbol: publicProcedure.input(z2.object({ symbol: z2.string(), enabled: z2.boolean() })).mutation(async ({ input }) => {
+    await toggleSymbol(input.symbol, input.enabled);
+    return { success: true, symbol: input.symbol, enabled: input.enabled };
   })
 });
 
