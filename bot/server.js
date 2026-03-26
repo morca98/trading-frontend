@@ -30,14 +30,51 @@ const SYMBOLS = (process.env.SYMBOLS || 'AAPL,MSFT,NVDA,TSLA,AMZN,GOOGL,META,AMD
 
 const SIGNAL_COOLDOWN = 90 * 60 * 1000; // 90 minutos
 
-// Yahoo Finance API
-const YF_BASE    = 'https://query1.finance.yahoo.com/v8/finance/chart';
-const YF_HEADERS = { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' };
+// Delay entre pedidos ao Yahoo Finance (ms) – evita rate limiting em cloud
+const REQUEST_DELAY = 500;
+
+// Yahoo Finance API – query2 é menos bloqueado em servidores cloud (Railway/AWS)
+const YF_BASE    = 'https://query2.finance.yahoo.com/v8/finance/chart';
+
+// Headers completos a imitar um browser real para evitar bloqueios
+const YF_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Accept': 'application/json, text/plain, */*',
+  'Accept-Language': 'en-US,en;q=0.9',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Origin': 'https://finance.yahoo.com',
+  'Referer': 'https://finance.yahoo.com/',
+  'Cache-Control': 'no-cache',
+  'Pragma': 'no-cache',
+};
 
 // Persistência
 const DATA_DIR    = process.env.DATA_DIR || '/tmp';
 const STATS_FILE  = path.join(DATA_DIR, 'stock_stats.json');
 const TRADES_FILE = path.join(DATA_DIR, 'stock_trades.json');
+
+// ── UTILITÁRIOS ───────────────────────────────────────────────────────────────
+function sleep(ms) {
+  return new Promise(function(resolve) { setTimeout(resolve, ms); });
+}
+
+// Retry com backoff exponencial para pedidos HTTP
+async function fetchWithRetry(url, options, retries) {
+  retries = retries || 3;
+  for (var attempt = 1; attempt <= retries; attempt++) {
+    try {
+      return await axios.get(url, options);
+    } catch (e) {
+      var status = e.response ? e.response.status : 0;
+      console.warn('[HTTP] Tentativa ' + attempt + '/' + retries + ' falhou – status=' + status + ' url=' + url.split('?')[0]);
+      if (attempt < retries) {
+        await sleep(1000 * Math.pow(2, attempt - 1)); // 1s, 2s, 4s
+      } else {
+        throw e;
+      }
+    }
+  }
+}
 
 // ── ESTADO GLOBAL ─────────────────────────────────────────────────────────────
 var lastSignal         = {};
@@ -98,10 +135,12 @@ async function sendTelegram(msg) {
     await axios.post(
       'https://api.telegram.org/bot' + TELEGRAM_TOKEN + '/sendMessage',
       { chat_id: TELEGRAM_CHAT_ID, text: msg, parse_mode: 'HTML' },
-      { timeout: 10000 }
+      { timeout: 15000 }
     );
+    console.log('[TELEGRAM] Mensagem enviada com sucesso.');
   } catch (e) {
-    console.error('[TELEGRAM] Erro:', e.message);
+    console.error('[TELEGRAM] Erro ao enviar:', e.message);
+    if (e.response) console.error('[TELEGRAM] Status:', e.response.status, '| Body:', JSON.stringify(e.response.data));
   }
 }
 
@@ -114,8 +153,8 @@ async function sendTelegram(msg) {
  * @param {string} range    - '1mo', '3mo', '6mo', '1y', '2y', '5y'
  */
 async function fetchCandles(symbol, interval, range) {
-  var url = YF_BASE + '/' + symbol + '?interval=' + interval + '&range=' + range;
-  var r   = await axios.get(url, { headers: YF_HEADERS, timeout: 15000 });
+  var url = YF_BASE + '/' + encodeURIComponent(symbol) + '?interval=' + interval + '&range=' + range;
+  var r   = await fetchWithRetry(url, { headers: YF_HEADERS, timeout: 20000 });
 
   var result = r.data.chart.result;
   if (!result || result.length === 0) throw new Error('Sem dados para ' + symbol);
@@ -128,7 +167,7 @@ async function fetchCandles(symbol, interval, range) {
 
   var candles = [];
   for (var i = 0; i < timestamps.length; i++) {
-    if (!ohlcv.open[i] || !ohlcv.close[i]) continue;
+    if (ohlcv.open[i] == null || ohlcv.close[i] == null) continue;
     candles.push({
       time:   timestamps[i] * 1000,
       open:   parseFloat(ohlcv.open[i]),
@@ -139,12 +178,13 @@ async function fetchCandles(symbol, interval, range) {
     });
   }
 
+  if (candles.length === 0) throw new Error('Candles vazios para ' + symbol);
   return candles;
 }
 
 async function fetchPrice(symbol) {
-  var url = YF_BASE + '/' + symbol + '?interval=1d&range=1d';
-  var r   = await axios.get(url, { headers: YF_HEADERS, timeout: 10000 });
+  var url = YF_BASE + '/' + encodeURIComponent(symbol) + '?interval=1d&range=1d';
+  var r   = await fetchWithRetry(url, { headers: YF_HEADERS, timeout: 15000 });
   return parseFloat(r.data.chart.result[0].meta.regularMarketPrice);
 }
 
@@ -223,16 +263,12 @@ async function runBot() {
     if (activeTrades[symbol]) continue;
 
     try {
-      // Buscar candles nos três timeframes em paralelo
-      var results = await Promise.all([
-        fetchCandles(symbol, '1wk', '5y'),  // Semanal — RSI semanal
-        fetchCandles(symbol, '1d',  '2y'),  // Diário  — SMA70
-        fetchCandles(symbol, '4h',  '6mo'), // 4h      — RSI, MACD, confirmação de vela
-      ]);
-
-      var weeklyCandles = results[0];
-      var dailyCandles  = results[1];
-      var h4Candles     = results[2];
+      // Buscar candles nos três timeframes sequencialmente (evita rate limiting)
+      var weeklyCandles = await fetchCandles(symbol, '1wk', '5y');  // Semanal
+      await sleep(REQUEST_DELAY);
+      var dailyCandles  = await fetchCandles(symbol, '1d',  '2y');  // Diário
+      await sleep(REQUEST_DELAY);
+      var h4Candles     = await fetchCandles(symbol, '4h',  '6mo'); // 4h
 
       // Gerar sinal MTF V3
       var result = generateMtfSignal({
@@ -345,7 +381,12 @@ async function runBot() {
     } catch (e) {
       console.error('[runBot] Erro ' + symbol + ':', e.message);
     }
+
+    // Delay entre símbolos para evitar rate limiting
+    await sleep(REQUEST_DELAY);
   }
+
+  console.log('[runBot] Scan concluído – ' + new Date().toISOString());
 }
 
 // ── RELATÓRIO DIÁRIO ──────────────────────────────────────────────────────────
@@ -477,25 +518,35 @@ async function sendStartupMessage() {
 async function main() {
   console.log('=== Stock Signal Bot MTF V3 ===');
   console.log('Símbolos:', SYMBOLS.length);
-  console.log('Telegram:', TELEGRAM_TOKEN ? 'Configurado' : 'NÃO configurado (modo console)');
+  console.log('Telegram Token:', TELEGRAM_TOKEN ? 'Configurado (' + TELEGRAM_TOKEN.slice(0, 10) + '...)' : 'NÃO configurado');
+  console.log('Telegram Chat ID:', TELEGRAM_CHAT_ID || 'NÃO configurado');
+  console.log('Yahoo Finance API:', YF_BASE);
   console.log('');
 
-  // Enviar mensagem de arranque com lógica completa
+  // Enviar mensagem de arranque ANTES do primeiro scan
   await sendStartupMessage();
 
-  // Primeira execução imediata
-  await runBot();
+  console.log('[main] Mensagem de arranque enviada. A iniciar primeiro scan em background...');
+
+  // Primeira execução em background – não bloqueia o processo
+  runBot().catch(function(e) { console.error('[runBot] Erro no primeiro scan:', e.message); });
 
   // Verificar trades ativos a cada 15 minutos
-  setInterval(checkActiveTrades, 15 * 60 * 1000);
+  setInterval(function() {
+    checkActiveTrades().catch(function(e) { console.error('[checkActiveTrades] Erro:', e.message); });
+  }, 15 * 60 * 1000);
 
   // Scan de novos sinais a cada 4 horas
-  setInterval(runBot, 4 * 60 * 60 * 1000);
+  setInterval(function() {
+    runBot().catch(function(e) { console.error('[runBot] Erro no scan periódico:', e.message); });
+  }, 4 * 60 * 60 * 1000);
 
   // Relatório diário (verifica a cada 5 minutos se é hora de enviar)
-  setInterval(sendDailyReport, 5 * 60 * 1000);
+  setInterval(function() {
+    sendDailyReport().catch(function(e) { console.error('[sendDailyReport] Erro:', e.message); });
+  }, 5 * 60 * 1000);
 
-  console.log('Bot em execução. Scan a cada 4h, verificação de trades a cada 15min.');
+  console.log('[main] Bot em execução. Scan a cada 4h, verificação de trades a cada 15min.');
 }
 
 main().catch(function(e) {
