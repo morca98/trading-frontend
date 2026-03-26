@@ -18,11 +18,13 @@ import {
   getDailyStats,
   updateOrCreateDailyStats,
   getSymbols,
+  addSymbol,
 } from "../db";
 import { calcATR, Candle } from "./technicalAnalysis";
 import { fetchCandles, fetchPrice, determineMacroTrend } from "./marketData";
 import { generateMtfSignal, MultiTimeframeData } from "./technicalAnalysisV3";
 import {
+  initTelegram,
   sendTelegram,
   formatBuySignal,
   formatSellSignal,
@@ -32,6 +34,7 @@ import {
   formatDailyReport,
   formatStartupNotification,
 } from "./telegram";
+import { ENV } from "../_core/env";
 
 const SIGNAL_COOLDOWN = 90 * 60 * 1000;       // 90 minutos
 const MONITOR_INTERVAL = 4 * 60 * 60 * 1000;  // 4 horas
@@ -56,7 +59,29 @@ const lastSignals: LastSignalTracker = {};
 export async function initializeEngine(): Promise<void> {
   console.log("[Engine] Initializing trading engine (MTF V3)...");
 
-  const symbols = await getSymbols();
+  // Initialize Telegram if credentials are provided
+  if (ENV.telegramToken && ENV.telegramChatId) {
+    initTelegram(ENV.telegramToken, ENV.telegramChatId);
+  } else {
+    console.warn("[Engine] Telegram credentials not found in environment variables");
+  }
+
+  let symbols = await getSymbols();
+  
+  // If no symbols are configured, add some defaults from environment or common ones
+  if (symbols.length === 0) {
+    console.log("[Engine] No symbols found in database, adding defaults...");
+    const defaultTickers = (process.env.SYMBOLS || "AAPL,MSFT,NVDA,TSLA,EDP.LS,GALP.LS").split(",");
+    for (const ticker of defaultTickers) {
+      try {
+        await addSymbol(ticker.trim().toUpperCase());
+      } catch (e) {
+        console.error(`[Engine] Failed to add default symbol ${ticker}:`, e);
+      }
+    }
+    symbols = await getSymbols();
+  }
+  
   console.log(`[Engine] Loaded ${symbols.length} symbols for monitoring`);
 
   symbols.forEach((sym) => {
