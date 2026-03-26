@@ -57,11 +57,21 @@ export const tradingRouter = router({
     .input(
       z.object({
         symbol: z.string().toUpperCase(),
-        region: z.enum(["US", "PT", "EU", "BR"]).optional().default("US"),
+        region: z.string().optional().default("US"),
+        sector: z.string().optional().default("Technology"),
       })
     )
     .mutation(async ({ input }) => {
-      await addSymbol(input.symbol, input.region);
+      await addSymbol(input.symbol, input.region, input.sector);
       return { success: true, symbol: input.symbol };
     }),
+
+  // Sync Telegram: Send a test message to verify connection
+  syncTelegram: publicProcedure.mutation(async () => {
+    const { sendTelegram, formatStartupNotification } = await import("../trading/telegram");
+    const symbols = await getSymbols();
+    const message = formatStartupNotification(symbols.length);
+    const success = await sendTelegram(message + "\n\n🔄 *Sincronização Manual Realizada*");
+    return { success };
+  }),
 });

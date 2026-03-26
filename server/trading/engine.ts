@@ -72,12 +72,29 @@ export async function initializeEngine(): Promise<void> {
   // If no symbols are configured, add some defaults from environment or common ones
   if (symbols.length === 0) {
     console.log("[Engine] No symbols found in database, adding defaults...");
-    const defaultTickers = (process.env.SYMBOLS || "AAPL,MSFT,NVDA,TSLA,EDP.LS,GALP.LS").split(",");
-    for (const ticker of defaultTickers) {
+    const defaultSymbols = [
+      { s: "AAPL", r: "US", sec: "Technology" },
+      { s: "MSFT", r: "US", sec: "Technology" },
+      { s: "GOOGL", r: "US", sec: "Technology" },
+      { s: "AMZN", r: "US", sec: "Consumer Discretionary" },
+      { s: "NVDA", r: "US", sec: "Technology" },
+      { s: "TSLA", r: "US", sec: "Consumer Discretionary" },
+      { s: "META", r: "US", sec: "Communication Services" },
+      { s: "EDP.LS", r: "PT", sec: "Utilities" },
+      { s: "JMT.LS", r: "PT", sec: "Consumer Staples" },
+      { s: "GALP.LS", r: "PT", sec: "Energy" },
+      { s: "BCP.LS", r: "PT", sec: "Financials" },
+      { s: "NOS.LS", r: "PT", sec: "Communication Services" },
+      { s: "BTCUSDT", r: "CRYPTO", sec: "Crypto" },
+      { s: "ETHUSDT", r: "CRYPTO", sec: "Crypto" },
+      { s: "BNBUSDT", r: "CRYPTO", sec: "Crypto" },
+      { s: "SOLUSDT", r: "CRYPTO", sec: "Crypto" }
+    ];
+    for (const item of defaultSymbols) {
       try {
-        await addSymbol(ticker.trim().toUpperCase());
+        await addSymbol(item.s, item.r, item.sec);
       } catch (e) {
-        console.error(`[Engine] Failed to add default symbol ${ticker}:`, e);
+        console.error(`[Engine] Failed to add default symbol ${item.s}:`, e);
       }
     }
     symbols = await getSymbols();

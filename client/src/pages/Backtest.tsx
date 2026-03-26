@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
-import { Loader2, TrendingUp, TrendingDown, BarChart3, Search, Activity, Target, Shield, AlertTriangle } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, BarChart3, Activity, Target, Shield, AlertTriangle, Clock } from "lucide-react";
 import { Link } from "wouter";
+import { toast } from "sonner";
 
 interface BacktestResult {
   symbol: string;
@@ -25,54 +25,42 @@ interface BacktestResult {
     bestTrade: number;
     worstTrade: number;
   };
+  trades: any[];
 }
 
 export default function Backtest() {
   const [symbol, setSymbol] = useState("AAPL");
   const [days, setDays] = useState(90);
   const [result, setResult] = useState<BacktestResult | null>(null);
-  const [compareSymbols, setCompareSymbols] = useState("AAPL,MSFT,NVDA");
 
-  const backtestMutation = trpc.backtest.runBacktest.useMutation();
-  const compareMutation = trpc.backtest.compareSymbols.useMutation();
-
-  const handleBacktest = async () => {
-    try {
-      const res = await backtestMutation.mutateAsync({
-        symbol: symbol.toUpperCase(),
-        days,
-      });
-
+  const backtestMutation = trpc.backtest.runBacktest.useMutation({
+    onSuccess: (res) => {
       if (res.success && res.symbol && res.metrics) {
         setResult({
           symbol: res.symbol,
-          period: res.period || "Unknown",
+          period: res.period || `${days} dias`,
           metrics: res.metrics,
+          trades: res.trades || [],
         });
+        toast.success(`Backtest de ${res.symbol} concluído!`);
+      } else if (res.error) {
+        toast.error(`Erro no Backtest: ${res.error}`);
       }
-    } catch (error) {
-      console.error("Backtest failed:", error);
+    },
+    onError: (err) => {
+      toast.error(`Falha na comunicação com o motor: ${err.message}`);
     }
-  };
+  });
 
-  const handleCompare = async () => {
-    try {
-      const symbols = compareSymbols.split(",").map((s) => s.trim().toUpperCase());
-      const res = await compareMutation.mutateAsync({
-        symbols,
-        days,
-      });
-
-      if (res.success && res.results && res.results.length > 0 && res.results[0].metrics) {
-        setResult({
-          symbol: res.results[0].symbol || "Unknown",
-          period: `${days} dias`,
-          metrics: res.results[0].metrics,
-        });
-      }
-    } catch (error) {
-      console.error("Comparison failed:", error);
+  const handleBacktest = () => {
+    if (!symbol) {
+      toast.error("Por favor insira um símbolo (ex: AAPL)");
+      return;
     }
+    backtestMutation.mutate({
+      symbol: symbol.toUpperCase().trim(),
+      days,
+    });
   };
 
   return (
@@ -93,7 +81,7 @@ export default function Backtest() {
               <span className="font-bold text-lg tracking-[3px] text-transparent bg-clip-text bg-gradient-to-r from-[#b388ff] to-[#00d4ff]">
                 BACKTEST ENGINE
               </span>
-              <span className="text-[7px] text-[#4a6080] tracking-[3px] uppercase">Simulation Mode | Public Access</span>
+              <span className="text-[7px] text-[#4a6080] tracking-[3px] uppercase">Simulation Mode | MTF V3 Logic</span>
             </div>
           </Link>
 
@@ -145,37 +133,19 @@ export default function Backtest() {
                   disabled={backtestMutation.isPending} 
                   className="w-full bg-[#b388ff] text-[#080c12] hover:bg-[#c8a2ff] rounded-none font-bold uppercase tracking-widest text-[10px] h-10"
                 >
-                  {backtestMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "EXECUTAR BACKTEST"}
+                  {backtestMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "EXECUTAR SIMULAÇÃO"}
                 </Button>
               </div>
             </div>
 
-            <div className="bg-[#0d1420] border border-[#1a2535]">
-              <div className="px-4 py-2 border-b border-[#1a2535] bg-[#111927]">
-                <div className="flex items-center gap-2">
-                  <Search className="w-3 h-3 text-[#00d4ff]" />
-                  <span className="text-[10px] font-bold tracking-widest uppercase">Comparação Multi-Ativo</span>
-                </div>
+            <div className="bg-[#0d1420] border border-[#1a2535] p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Clock className="w-3 h-3 text-[#00d4ff]" />
+                <span className="text-[10px] font-bold tracking-widest uppercase">Motor MTF V3</span>
               </div>
-              <div className="p-4 space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[9px] text-[#4a6080] uppercase tracking-wider">Lista de Símbolos</label>
-                  <Input
-                    value={compareSymbols}
-                    onChange={(e) => setCompareSymbols(e.target.value)}
-                    className="bg-[#080c12] border-[#1a2535] text-[#c8d8f0] font-mono text-xs focus:border-[#00d4ff] h-9 rounded-none"
-                    placeholder="AAPL,MSFT,NVDA"
-                  />
-                </div>
-                <Button 
-                  onClick={handleCompare} 
-                  disabled={compareMutation.isPending} 
-                  variant="outline"
-                  className="w-full border-[#00d4ff] text-[#00d4ff] hover:bg-[#00d4ff]/10 rounded-none font-bold uppercase tracking-widest text-[10px] h-10"
-                >
-                  {compareMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "COMPARAR PORTFÓLIO"}
-                </Button>
-              </div>
+              <p className="text-[9px] text-[#4a6080] leading-relaxed uppercase tracking-wider">
+                A simulação aplica a estratégia de tripla confirmação (W1, D1, H4) com gestão de risco de 1% e rácio 1:3 fixo.
+              </p>
             </div>
 
             <div className="bg-[#ff3d57]/5 border border-[#ff3d57]/20 p-4">
@@ -184,17 +154,17 @@ export default function Backtest() {
                 <span className="text-[9px] font-bold text-[#ff3d57] uppercase tracking-widest">Aviso de Risco</span>
               </div>
               <p className="text-[8px] text-[#4a6080] leading-relaxed uppercase">
-                Os resultados passados não garantem performance futura. O motor utiliza velas diárias sintéticas para simular a lógica MTF V3.
+                Resultados baseados em dados históricos. O motor simula condições reais mas não garante lucros futuros.
               </p>
             </div>
           </div>
 
           {/* Results Panel */}
           <div className="lg:col-span-2 space-y-6">
-            {!result && !backtestMutation.isPending && !compareMutation.isPending ? (
+            {!result && !backtestMutation.isPending ? (
               <div className="h-full flex flex-col items-center justify-center border border-dashed border-[#1a2535] bg-[#0d1420]/50 py-20">
                 <BarChart3 className="w-12 h-12 text-[#4a6080] opacity-20 mb-4" />
-                <p className="text-[10px] text-[#4a6080] uppercase tracking-[3px]">Aguardando execução de simulação...</p>
+                <p className="text-[10px] text-[#4a6080] uppercase tracking-[3px]">Aguardando parâmetros de simulação...</p>
               </div>
             ) : result ? (
               <div className="space-y-6">
@@ -254,12 +224,12 @@ export default function Backtest() {
                   </div>
                 </div>
 
-                {/* Interpretation & Strategy Details */}
+                {/* Strategy Details */}
                 <div className="bg-[#0d1420] border border-[#1a2535]">
                   <div className="px-4 py-2 border-b border-[#1a2535] bg-[#111927]">
                     <div className="flex items-center gap-2">
                       <Shield className="w-3 h-3 text-[#00d4ff]" />
-                      <span className="text-[10px] font-bold tracking-widest uppercase">Análise de Estratégia</span>
+                      <span className="text-[10px] font-bold tracking-widest uppercase">Análise de Estratégia Validada</span>
                     </div>
                   </div>
                   <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">

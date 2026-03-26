@@ -30,6 +30,7 @@ export const symbols = mysqlTable("symbols", {
   id: int("id").autoincrement().primaryKey(),
   symbol: varchar("symbol", { length: 20 }).notNull().unique(),
   region: varchar("region", { length: 10 }).default("US").notNull(),
+  sector: varchar("sector", { length: 50 }).default("Technology").notNull(),
   enabled: int("enabled").default(1).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

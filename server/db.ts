@@ -213,11 +213,11 @@ export async function getSymbols(): Promise<Symbol[]> {
   }
 }
 
-export async function addSymbol(symbol: string, region: string = "US"): Promise<void> {
+export async function addSymbol(symbol: string, region: string = "US", sector: string = "Technology"): Promise<void> {
   const db = await getDb();
   if (!db) return;
   try {
-    await db.insert(symbols).values({ symbol, region });
+    await db.insert(symbols).values({ symbol, region, sector });
   } catch (error) {
     console.error("[Database] Failed to add symbol:", error);
     throw error;
