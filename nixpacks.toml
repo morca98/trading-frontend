@@ -2,7 +2,10 @@
 nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = ["cd bot && npm install"]
+cmds = ["npm install -g pnpm", "pnpm install"]
+
+[phases.build]
+cmds = ["pnpm build"]
 
 [start]
-cmd = "cd bot && node server.js"
+cmd = "pnpm start"
