@@ -248,10 +248,16 @@ async function runTradingLoop(): Promise<void> {
     }
   }
 
-  if (signalsGenerated === 0) {
-    const message = formatNoSignalsMessage(symbols.length);
-    await sendTelegram(message);
-  }
+  // Enviar sempre um relatório de conclusão do scan (a cada 4h)
+  const timestamp = new Date().toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" });
+  const reportMsg = `📊 <b>Relatório de Scan (4h)</b>\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `Ativos analisados: ${symbols.length}\n` +
+    `Sinais gerados: ${signalsGenerated}\n` +
+    `Status: Concluído\n` +
+    `⏰ ${timestamp}`;
+  
+  await sendTelegram(reportMsg);
 
   console.log(`[Engine] Scan complete. Signals generated: ${signalsGenerated}`);
 }
@@ -265,15 +271,32 @@ async function runMonitoringLoop(): Promise<void> {
 
 // ── Relatório diário ──────────────────────────────────────────────────────────
 
+let lastDailyReportDate = "";
+
 async function runDailyReport(): Promise<void> {
   const now = new Date();
-  if (now.getUTCHours() === 8 && now.getUTCMinutes() < 5) {
+  // Converter para hora de Lisboa (WET/WEST)
+  const lisbonTime = new Intl.DateTimeFormat("pt-PT", {
+    timeZone: "Europe/Lisbon",
+    hour: "numeric",
+    minute: "numeric",
+    hour12: false
+  }).formatToParts(now);
+  
+  const hour = parseInt(lisbonTime.find(p => p.type === "hour")?.value || "0");
+  const today = now.toISOString().slice(0, 10);
+
+  // Enviar às 09:00 de Lisboa, apenas uma vez por dia
+  if (hour === 9 && lastDailyReportDate !== today) {
     console.log("[Engine] Generating daily report...");
     try {
       const { formatDailyReport } = await import("./telegram");
       const date = now.toLocaleDateString("pt-PT", { timeZone: "Europe/Lisbon" });
+      
+      // Por agora enviamos com zeros pois as estatísticas ainda não são persistidas em DB no engine.ts
       const message = formatDailyReport(date, 0, 0, 0, 0, 0, 0);
       await sendTelegram(message);
+      lastDailyReportDate = today;
     } catch (error) {
       console.error("[Engine] Error generating daily report:", error);
     }
