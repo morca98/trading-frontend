@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { Loader2, TrendingUp, TrendingDown, Activity, Target, Shield, Clock, Bell, List, LineChart, RefreshCw } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, Activity, Target, Shield, Clock, Bell, List, LineChart, RefreshCw, BarChart } from "lucide-react";
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
@@ -22,14 +22,14 @@ export default function Dashboard() {
   // Processar dados para o gráfico de performance
   const chartData = useMemo(() => {
     if (!performanceData || performanceData.length === 0) {
-      // Dados simulados baseados na performance real de 6% reportada pelo utilizador
+      // Começa em zero absoluto já que não há sinais
       return [
-        { date: '01/03', pnl: 0 },
-        { date: '05/03', pnl: 1.2 },
-        { date: '10/03', pnl: 0.8 },
-        { date: '15/03', pnl: 3.5 },
-        { date: '20/03', pnl: 4.2 },
-        { date: '25/03', pnl: 6.0 },
+        { date: 'T-5', pnl: 0 },
+        { date: 'T-4', pnl: 0 },
+        { date: 'T-3', pnl: 0 },
+        { date: 'T-2', pnl: 0 },
+        { date: 'T-1', pnl: 0 },
+        { date: 'Hoje', pnl: 0 },
       ];
     }
     return [...performanceData]
@@ -39,6 +39,27 @@ export default function Dashboard() {
         pnl: Number(d.totalPnl)
       }));
   }, [performanceData]);
+
+  // Estatísticas reais calculadas a partir dos sinais globais (se existirem)
+  const stats = useMemo(() => {
+    if (!globalSignals || globalSignals.length === 0) {
+      return {
+        winRate: 0,
+        profitFactor: 0,
+        totalSignals: 0,
+        activeTrades: activeTrades?.length || 0
+      };
+    }
+    
+    // Como os sinais são apenas entradas, as estatísticas reais virão da tabela de trades fechados futuramente.
+    // Por agora, resetamos conforme solicitado.
+    return {
+      winRate: 0,
+      profitFactor: 0,
+      totalSignals: globalSignals.length,
+      activeTrades: activeTrades?.length || 0
+    };
+  }, [globalSignals, activeTrades]);
 
   return (
     <div className="min-h-screen bg-[#080c12] text-[#c8d8f0] font-mono selection:bg-[#00d4ff]/30 pb-20">
@@ -92,7 +113,7 @@ export default function Dashboard() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1a2535" vertical={false} />
                 <XAxis dataKey="date" stroke="#4a6080" fontSize={10} tickLine={false} axisLine={false} />
-                <YAxis stroke="#4a6080" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+                <YAxis stroke="#4a6080" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} domain={[0, 10]} />
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#0d1420', border: '1px solid #1a2535', fontSize: '10px' }}
                   itemStyle={{ color: '#00e676' }}
@@ -104,24 +125,30 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-5 gap-4">
           <div className="bg-[#0d1420] border border-[#1a2535] p-4 relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-1 h-full bg-[#00d4ff]" />
             <div className="text-[8px] text-[#4a6080] tracking-widest uppercase mb-1">Win Rate</div>
-            <div className="text-2xl font-bold text-[#00e676]">68.4%</div>
-            <div className="text-[7px] text-[#4a6080] mt-1">Baseado em 142 sinais</div>
+            <div className="text-2xl font-bold text-[#00e676]">{stats.winRate.toFixed(1)}%</div>
+            <div className="text-[7px] text-[#4a6080] mt-1">Sinais vencedores</div>
           </div>
           <div className="bg-[#0d1420] border border-[#1a2535] p-4 relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-1 h-full bg-[#b388ff]" />
             <div className="text-[8px] text-[#4a6080] tracking-widest uppercase mb-1">Profit Factor</div>
-            <div className="text-2xl font-bold text-[#b388ff]">2.45</div>
-            <div className="text-[7px] text-[#4a6080] mt-1">Performance V3 MTF</div>
+            <div className="text-2xl font-bold text-[#b388ff]">{stats.profitFactor.toFixed(2)}</div>
+            <div className="text-[7px] text-[#4a6080] mt-1">Rácio Lucro/Prejuízo</div>
           </div>
           <div className="bg-[#0d1420] border border-[#1a2535] p-4 relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-1 h-full bg-[#ffd600]" />
             <div className="text-[8px] text-[#4a6080] tracking-widest uppercase mb-1">Trades Ativos</div>
-            <div className="text-2xl font-bold text-[#ffd600]">{activeTrades?.length || 0}</div>
+            <div className="text-2xl font-bold text-[#ffd600]">{stats.activeTrades}</div>
             <div className="text-[7px] text-[#4a6080] mt-1">Em monitorização real</div>
+          </div>
+          <div className="bg-[#0d1420] border border-[#1a2535] p-4 relative overflow-hidden group">
+            <div className="absolute top-0 left-0 w-1 h-full bg-[#00e676]" />
+            <div className="text-[8px] text-[#4a6080] tracking-widest uppercase mb-1">Total Trades</div>
+            <div className="text-2xl font-bold text-[#00e676]">{stats.totalSignals}</div>
+            <div className="text-[7px] text-[#4a6080] mt-1">Sinais gerados pelo bot</div>
           </div>
           <div className="bg-[#0d1420] border border-[#1a2535] p-4 relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-1 h-full bg-[#00e5ff]" />
