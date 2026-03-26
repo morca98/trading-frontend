@@ -1,9 +1,7 @@
 import { useState } from "react";
-import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { Loader2, TrendingUp, TrendingDown, BarChart3, Search, Activity, Target, Shield, AlertTriangle } from "lucide-react";
 import { Link } from "wouter";
@@ -30,7 +28,6 @@ interface BacktestResult {
 }
 
 export default function Backtest() {
-  const { isAuthenticated, logout, user } = useAuth();
   const [symbol, setSymbol] = useState("AAPL");
   const [days, setDays] = useState(90);
   const [result, setResult] = useState<BacktestResult | null>(null);
@@ -78,24 +75,6 @@ export default function Backtest() {
     }
   };
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-[#080c12] flex items-center justify-center p-4">
-        <Card className="w-full max-w-md border-[#243047] bg-[#0d1420] text-[#c8d8f0]">
-          <CardHeader className="text-center">
-            <CardTitle className="text-xl font-bold tracking-widest uppercase">Acesso Restrito</CardTitle>
-            <p className="text-[#4a6080] text-xs uppercase tracking-wider mt-2">Faça login para aceder ao simulador</p>
-          </CardHeader>
-          <CardContent className="flex justify-center pb-8">
-            <Button asChild className="bg-[#00d4ff] text-[#080c12] hover:bg-[#00e5ff] rounded-none px-8 font-bold uppercase tracking-widest text-xs">
-              <a href="/api/auth/login">Login</a>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#080c12] text-[#c8d8f0] font-mono selection:bg-[#00d4ff]/30 pb-20">
       {/* Estilo Global */}
@@ -114,15 +93,17 @@ export default function Backtest() {
               <span className="font-bold text-lg tracking-[3px] text-transparent bg-clip-text bg-gradient-to-r from-[#b388ff] to-[#00d4ff]">
                 BACKTEST ENGINE
               </span>
-              <span className="text-[7px] text-[#4a6080] tracking-[3px] uppercase">Simulation Mode | User: {user?.name || "Trader"}</span>
+              <span className="text-[7px] text-[#4a6080] tracking-[3px] uppercase">Simulation Mode | Public Access</span>
             </div>
           </Link>
 
           <div className="flex items-center gap-3">
             <Link href="/dashboard">
-              <Button variant="outline" className="border-[#243047] hover:border-[#00d4ff] hover:text-[#00d4ff] bg-transparent text-[9px] uppercase tracking-wider h-7">Consola</Button>
+              <Button variant="outline" className="border-[#243047] hover:border-[#00d4ff] hover:text-[#00d4ff] bg-transparent text-[9px] uppercase tracking-wider h-7">Dashboard</Button>
             </Link>
-            <Button onClick={logout} variant="ghost" className="text-[#4a6080] hover:text-[#ff3d57] text-[9px] uppercase h-7">Sair</Button>
+            <Link href="/">
+              <Button variant="ghost" className="text-[#4a6080] hover:text-[#00d4ff] text-[9px] uppercase h-7">Início</Button>
+            </Link>
           </div>
         </div>
       </nav>

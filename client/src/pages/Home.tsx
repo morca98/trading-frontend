@@ -1,13 +1,8 @@
-import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getLoginUrl } from "@/const";
 import { Link } from "wouter";
-import { TrendingUp, BarChart3, Zap, Shield, Target, Activity, Cpu, Bell } from "lucide-react";
+import { Target, Shield, Bell, BarChart3 } from "lucide-react";
 
 export default function Home() {
-  const { isAuthenticated, logout } = useAuth();
-
   return (
     <div className="min-h-screen bg-[#080c12] text-[#c8d8f0] font-mono selection:bg-[#00d4ff]/30">
       {/* Estilo Global para simular o CRT do trading-backend */}
@@ -41,21 +36,12 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-3">
-            {isAuthenticated ? (
-              <>
-                <Link href="/dashboard">
-                  <Button variant="outline" className="border-[#243047] hover:border-[#00d4ff] hover:text-[#00d4ff] bg-transparent text-[10px] uppercase tracking-wider h-8">Dashboard</Button>
-                </Link>
-                <Link href="/backtest">
-                  <Button variant="outline" className="border-[#243047] hover:border-[#00d4ff] hover:text-[#00d4ff] bg-transparent text-[10px] uppercase tracking-wider h-8">Backtest</Button>
-                </Link>
-                <Button onClick={logout} variant="ghost" className="text-[#4a6080] hover:text-[#ff3d57] text-[10px] uppercase h-8">Logout</Button>
-              </>
-            ) : (
-              <Button asChild className="bg-[#00d4ff]/10 border border-[#00d4ff] text-[#00d4ff] hover:bg-[#00d4ff]/20 text-[10px] uppercase tracking-wider h-8">
-                <a href={getLoginUrl()}>Aceder ao Terminal</a>
-              </Button>
-            )}
+            <Link href="/dashboard">
+              <Button variant="outline" className="border-[#243047] hover:border-[#00d4ff] hover:text-[#00d4ff] bg-transparent text-[10px] uppercase tracking-wider h-8">Dashboard</Button>
+            </Link>
+            <Link href="/backtest">
+              <Button variant="outline" className="border-[#243047] hover:border-[#00d4ff] hover:text-[#00d4ff] bg-transparent text-[10px] uppercase tracking-wider h-8">Backtest</Button>
+            </Link>
           </div>
         </div>
       </nav>
@@ -80,17 +66,11 @@ export default function Home() {
                 Gestão de risco automatizada com 1% por posição e rácio 1:3.
               </p>
               <div className="flex gap-4">
-                {isAuthenticated ? (
-                  <Link href="/dashboard">
-                    <Button className="bg-[#00d4ff] text-[#080c12] hover:bg-[#00e5ff] rounded-none px-8 py-6 font-bold uppercase tracking-widest text-xs">
-                      Abrir Consola
-                    </Button>
-                  </Link>
-                ) : (
-                  <Button asChild className="bg-[#00d4ff] text-[#080c12] hover:bg-[#00e5ff] rounded-none px-8 py-6 font-bold uppercase tracking-widest text-xs">
-                    <a href={getLoginUrl()}>Iniciar Sessão</a>
+                <Link href="/dashboard">
+                  <Button className="bg-[#00d4ff] text-[#080c12] hover:bg-[#00e5ff] rounded-none px-8 py-6 font-bold uppercase tracking-widest text-xs">
+                    Ver Performance em Direto
                   </Button>
-                )}
+                </Link>
               </div>
             </div>
 

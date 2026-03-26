@@ -1,15 +1,11 @@
-import { useAuth } from "@/_core/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { Loader2, TrendingUp, TrendingDown, Activity, Target, Shield, Clock, BarChart3, Bell, List, LineChart } from "lucide-react";
+import { Loader2, TrendingUp, TrendingDown, Activity, Target, Shield, Clock, Bell, List, LineChart } from "lucide-react";
 import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
 export default function Dashboard() {
-  const { user, isAuthenticated, logout } = useAuth();
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'active' | 'history' | 'assets'>('active');
 
@@ -39,24 +35,6 @@ export default function Dashboard() {
       }));
   }, [performanceData]);
 
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-[#080c12] flex items-center justify-center p-4">
-        <Card className="w-full max-w-md border-[#243047] bg-[#0d1420] text-[#c8d8f0]">
-          <CardHeader className="text-center">
-            <CardTitle className="text-xl font-bold tracking-widest uppercase">Acesso Restrito</CardTitle>
-            <p className="text-[#4a6080] text-xs uppercase tracking-wider mt-2">Faça login para aceder ao terminal</p>
-          </CardHeader>
-          <CardContent className="flex justify-center pb-8">
-            <Button asChild className="bg-[#00d4ff] text-[#080c12] hover:bg-[#00e5ff] rounded-none px-8 font-bold uppercase tracking-widest text-xs">
-              <a href="/api/auth/login">Login</a>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#080c12] text-[#c8d8f0] font-mono selection:bg-[#00d4ff]/30 pb-20">
       <style dangerouslySetInnerHTML={{ __html: `
@@ -74,14 +52,16 @@ export default function Dashboard() {
               <span className="font-bold text-lg tracking-[3px] text-transparent bg-clip-text bg-gradient-to-r from-[#00d4ff] to-[#00e5ff]">
                 TERMINAL v3.0
               </span>
-              <span className="text-[7px] text-[#4a6080] tracking-[3px] uppercase">User: {user?.name || "Trader"}</span>
+              <span className="text-[7px] text-[#4a6080] tracking-[3px] uppercase">Live Performance Console</span>
             </div>
           </Link>
           <div className="flex items-center gap-3">
             <Link href="/backtest">
               <Button variant="outline" className="border-[#243047] hover:border-[#b388ff] hover:text-[#b388ff] bg-transparent text-[9px] uppercase tracking-wider h-7">Backtest</Button>
             </Link>
-            <Button onClick={logout} variant="ghost" className="text-[#4a6080] hover:text-[#ff3d57] text-[9px] uppercase h-7">Sair</Button>
+            <Link href="/">
+              <Button variant="ghost" className="text-[#4a6080] hover:text-[#00d4ff] text-[9px] uppercase h-7">Início</Button>
+            </Link>
           </div>
         </div>
       </nav>
