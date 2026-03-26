@@ -26,6 +26,20 @@ export const tradingRouter = router({
       return await getSignalsBySymbol(input.symbol, input.limit);
     }),
 
+  getGlobalSignals: protectedProcedure
+    .input(z.object({ limit: z.number().optional().default(50) }))
+    .query(async ({ input }) => {
+      const { getGlobalSignals } = await import("../db");
+      return await getGlobalSignals(input.limit);
+    }),
+
+  getPerformance: protectedProcedure
+    .input(z.object({ limit: z.number().optional().default(30) }))
+    .query(async ({ input }) => {
+      const { getPerformanceHistory } = await import("../db");
+      return await getPerformanceHistory(input.limit);
+    }),
+
   // Get daily stats
   getDailyStats: protectedProcedure
     .input(z.object({ date: z.string() }))

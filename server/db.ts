@@ -150,6 +150,30 @@ export async function getSignalsBySymbol(symbol: string, limit: number = 50): Pr
   }
 }
 
+export async function getGlobalSignals(limit: number = 50): Promise<Signal[]> {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    const { desc } = require("drizzle-orm");
+    return await db.select().from(signals).orderBy(desc(signals.createdAt)).limit(limit);
+  } catch (error) {
+    console.error("[Database] Failed to get global signals:", error);
+    return [];
+  }
+}
+
+export async function getPerformanceHistory(limit: number = 30): Promise<DailyStat[]> {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    const { desc } = require("drizzle-orm");
+    return await db.select().from(dailyStats).orderBy(desc(dailyStats.date)).limit(limit);
+  } catch (error) {
+    console.error("[Database] Failed to get performance history:", error);
+    return [];
+  }
+}
+
 export async function getDailyStats(date: string): Promise<DailyStat | null> {
   const db = await getDb();
   if (!db) return null;

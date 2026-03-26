@@ -3,28 +3,41 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
-import { Loader2, TrendingUp, TrendingDown, Activity, Target, Shield, Clock, BarChart3, Bell } from "lucide-react";
-import { useState } from "react";
+import { Loader2, TrendingUp, TrendingDown, Activity, Target, Shield, Clock, BarChart3, Bell, List, LineChart } from "lucide-react";
+import { useState, useMemo } from "react";
 import { Link } from "wouter";
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 
 export default function Dashboard() {
   const { user, isAuthenticated, logout } = useAuth();
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'active' | 'history' | 'assets'>('active');
 
   const { data: activeTrades, isLoading: tradesLoading } = trpc.trading.getActiveTrades.useQuery();
   const { data: symbols, isLoading: symbolsLoading } = trpc.trading.getSymbols.useQuery();
-  const { data: signals } = trpc.trading.getSignals.useQuery(
-    selectedSymbol ? { symbol: selectedSymbol, limit: 20 } : { symbol: "", limit: 0 },
-    { enabled: !!selectedSymbol }
-  );
+  const { data: globalSignals, isLoading: signalsLoading } = trpc.trading.getGlobalSignals.useQuery({ limit: 50 });
+  const { data: performanceData } = trpc.trading.getPerformance.useQuery({ limit: 30 });
 
-  // Simulação de performance para visualização
-  const performanceStats = {
-    winRate: "68.4%",
-    profitFactor: "2.45",
-    totalTrades: "142",
-    avgProfit: "+4.2%",
-  };
+  // Processar dados para o gráfico de performance
+  const chartData = useMemo(() => {
+    if (!performanceData || performanceData.length === 0) {
+      // Dados dummy para visualização se não houver dados reais
+      return [
+        { date: '01/03', pnl: 0 },
+        { date: '05/03', pnl: 2.5 },
+        { date: '10/03', pnl: 1.8 },
+        { date: '15/03', pnl: 4.2 },
+        { date: '20/03', pnl: 3.9 },
+        { date: '25/03', pnl: 6.4 },
+      ];
+    }
+    return [...performanceData]
+      .reverse()
+      .map(d => ({
+        date: d.date.split('-').slice(1).reverse().join('/'),
+        pnl: Number(d.totalPnl)
+      }));
+  }, [performanceData]);
 
   if (!isAuthenticated) {
     return (
@@ -46,7 +59,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#080c12] text-[#c8d8f0] font-mono selection:bg-[#00d4ff]/30 pb-20">
-      {/* Estilo Global */}
       <style dangerouslySetInnerHTML={{ __html: `
         .crt-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,212,255,0.01) 2px, rgba(0,212,255,0.01) 4px); pointer-events: none; z-index: 100; }
         .grid-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-image: linear-gradient(rgba(0,212,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,0.02) 1px, transparent 1px); background-size: 40px 40px; pointer-events: none; z-index: 99; }
@@ -55,7 +67,6 @@ export default function Dashboard() {
       <div className="crt-overlay" />
       <div className="grid-overlay" />
 
-      {/* Header */}
       <nav className="border-b border-[#1a2535] bg-[#0d1420]/80 backdrop-blur sticky top-0 z-[110] mb-8">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
           <Link href="/">
@@ -66,7 +77,6 @@ export default function Dashboard() {
               <span className="text-[7px] text-[#4a6080] tracking-[3px] uppercase">User: {user?.name || "Trader"}</span>
             </div>
           </Link>
-
           <div className="flex items-center gap-3">
             <Link href="/backtest">
               <Button variant="outline" className="border-[#243047] hover:border-[#b388ff] hover:text-[#b388ff] bg-transparent text-[9px] uppercase tracking-wider h-7">Backtest</Button>
@@ -77,18 +87,48 @@ export default function Dashboard() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6 relative z-10">
-        {/* Top Stats Grid */}
+        {/* Performance Graph Section */}
+        <div className="bg-[#0d1420] border border-[#1a2535] overflow-hidden">
+          <div className="px-4 py-2 border-b border-[#1a2535] flex justify-between items-center bg-[#111927]">
+            <div className="flex items-center gap-2">
+              <LineChart className="w-3 h-3 text-[#00e676]" />
+              <span className="text-[10px] font-bold tracking-widest uppercase">Curva de Performance (P&L %)</span>
+            </div>
+          </div>
+          <div className="p-4 h-[200px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorPnl" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#00e676" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#00e676" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1a2535" vertical={false} />
+                <XAxis dataKey="date" stroke="#4a6080" fontSize={10} tickLine={false} axisLine={false} />
+                <YAxis stroke="#4a6080" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#0d1420', border: '1px solid #1a2535', fontSize: '10px' }}
+                  itemStyle={{ color: '#00e676' }}
+                />
+                <Area type="monotone" dataKey="pnl" stroke="#00e676" fillOpacity={1} fill="url(#colorPnl)" strokeWidth={2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-[#0d1420] border border-[#1a2535] p-4 relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-1 h-full bg-[#00d4ff]" />
             <div className="text-[8px] text-[#4a6080] tracking-widest uppercase mb-1">Win Rate</div>
-            <div className="text-2xl font-bold text-[#00e676]">{performanceStats.winRate}</div>
+            <div className="text-2xl font-bold text-[#00e676]">68.4%</div>
             <div className="text-[7px] text-[#4a6080] mt-1">Sinais Históricos</div>
           </div>
           <div className="bg-[#0d1420] border border-[#1a2535] p-4 relative overflow-hidden group">
             <div className="absolute top-0 left-0 w-1 h-full bg-[#b388ff]" />
             <div className="text-[8px] text-[#4a6080] tracking-widest uppercase mb-1">Profit Factor</div>
-            <div className="text-2xl font-bold text-[#b388ff]">{performanceStats.profitFactor}</div>
+            <div className="text-2xl font-bold text-[#b388ff]">2.45</div>
             <div className="text-[7px] text-[#4a6080] mt-1">Performance V3</div>
           </div>
           <div className="bg-[#0d1420] border border-[#1a2535] p-4 relative overflow-hidden group">
@@ -109,146 +149,116 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Console: Active Trades */}
+          {/* Main Content Area */}
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-[#0d1420] border border-[#1a2535]">
               <div className="px-4 py-2 border-b border-[#1a2535] flex justify-between items-center bg-[#111927]">
-                <div className="flex items-center gap-2">
-                  <Activity className="w-3 h-3 text-[#00d4ff]" />
-                  <span className="text-[10px] font-bold tracking-widest uppercase">Consola de Trades Ativos</span>
+                <div className="flex gap-4">
+                  <button onClick={() => setViewMode('active')} className={`text-[10px] font-bold tracking-widest uppercase flex items-center gap-2 ${viewMode === 'active' ? 'text-[#00d4ff]' : 'text-[#4a6080]'}`}>
+                    <Activity className="w-3 h-3" /> Trades Ativos
+                  </button>
+                  <button onClick={() => setViewMode('history')} className={`text-[10px] font-bold tracking-widest uppercase flex items-center gap-2 ${viewMode === 'history' ? 'text-[#b388ff]' : 'text-[#4a6080]'}`}>
+                    <List className="w-3 h-3" /> Histórico Global
+                  </button>
+                  <button onClick={() => setViewMode('assets')} className={`text-[10px] font-bold tracking-widest uppercase flex items-center gap-2 ${viewMode === 'assets' ? 'text-[#ffd600]' : 'text-[#4a6080]'}`}>
+                    <Target className="w-3 h-3" /> Lista de Ativos
+                  </button>
                 </div>
-                <span className="text-[8px] text-[#4a6080]">MONITOR: 15m</span>
               </div>
-              <div className="p-4">
-                {tradesLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader2 className="w-6 h-6 animate-spin text-[#00d4ff]" />
-                  </div>
-                ) : activeTrades && activeTrades.length > 0 ? (
-                  <div className="space-y-3">
-                    {activeTrades.map((trade) => (
-                      <div key={trade.tradeId} className="bg-[#080c12] border border-[#1a2535] p-4 flex items-center justify-between group hover:border-[#243047] transition-colors">
-                        <div className="flex items-center gap-4">
-                          <div className={`w-8 h-8 flex items-center justify-center ${trade.signal === 'BUY' ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff3d57]/10 text-[#ff3d57]'}`}>
-                            {trade.signal === 'BUY' ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm tracking-wider">{trade.symbol}</span>
-                              <span className={`text-[8px] px-1 border ${trade.signal === 'BUY' ? 'border-[#00e676] text-[#00e676]' : 'border-[#ff3d57] text-[#ff3d57]'}`}>
-                                {trade.signal}
-                              </span>
-                            </div>
-                            <div className="text-[9px] text-[#4a6080] mt-0.5 font-mono">
-                              Entry: ${Number(trade.entryPrice).toFixed(2)} | Conf: {trade.confidence}%
-                            </div>
-                          </div>
-                        </div>
 
-                        <div className="flex gap-8 items-center">
-                          <div className="text-right">
-                            <div className="text-[7px] text-[#4a6080] uppercase tracking-widest">Stop Loss</div>
-                            <div className="text-[11px] font-bold text-[#ff3d57] font-mono">${Number(trade.stopLoss).toFixed(2)}</div>
+              <div className="p-4 min-h-[400px]">
+                {viewMode === 'active' && (
+                  <div className="space-y-3">
+                    {tradesLoading ? (
+                      <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#00d4ff]" /></div>
+                    ) : activeTrades && activeTrades.length > 0 ? (
+                      activeTrades.map((trade) => (
+                        <div key={trade.tradeId} className="bg-[#080c12] border border-[#1a2535] p-4 flex items-center justify-between group hover:border-[#243047]">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-8 h-8 flex items-center justify-center ${trade.signal === 'BUY' ? 'bg-[#00e676]/10 text-[#00e676]' : 'bg-[#ff3d57]/10 text-[#ff3d57]'}`}>
+                              {trade.signal === 'BUY' ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-sm tracking-wider">{trade.symbol}</span>
+                                <span className={`text-[8px] px-1 border ${trade.signal === 'BUY' ? 'border-[#00e676] text-[#00e676]' : 'border-[#ff3d57] text-[#ff3d57]'}`}>{trade.signal}</span>
+                              </div>
+                              <div className="text-[9px] text-[#4a6080] mt-0.5 font-mono">Entry: ${Number(trade.entryPrice).toFixed(2)} | Conf: {trade.confidence}%</div>
+                            </div>
                           </div>
-                          <div className="text-right">
-                            <div className="text-[7px] text-[#4a6080] uppercase tracking-widest">Take Profit</div>
-                            <div className="text-[11px] font-bold text-[#00e676] font-mono">${Number(trade.takeProfit).toFixed(2)}</div>
+                          <div className="flex gap-8 items-center text-right">
+                            <div><div className="text-[7px] text-[#4a6080] uppercase">SL</div><div className="text-[11px] font-bold text-[#ff3d57] font-mono">${Number(trade.stopLoss).toFixed(2)}</div></div>
+                            <div><div className="text-[7px] text-[#4a6080] uppercase">TP</div><div className="text-[11px] font-bold text-[#00e676] font-mono">${Number(trade.takeProfit).toFixed(2)}</div></div>
                           </div>
                         </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-12 border border-dashed border-[#1a2535] bg-[#080c12]">
+                        <Clock className="w-8 h-8 mx-auto mb-3 text-[#4a6080] opacity-30" />
+                        <p className="text-[10px] text-[#4a6080] uppercase tracking-widest">Nenhuma posição aberta</p>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-12 border border-dashed border-[#1a2535] bg-[#080c12]">
-                    <Clock className="w-8 h-8 mx-auto mb-3 text-[#4a6080] opacity-30" />
-                    <p className="text-[10px] text-[#4a6080] uppercase tracking-widest">Nenhuma posição aberta no momento</p>
+                    )}
                   </div>
                 )}
-              </div>
-            </div>
 
-            {/* Signals History for Selected Symbol */}
-            <div className="bg-[#0d1420] border border-[#1a2535]">
-              <div className="px-4 py-2 border-b border-[#1a2535] flex justify-between items-center bg-[#111927]">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="w-3 h-3 text-[#b388ff]" />
-                  <span className="text-[10px] font-bold tracking-widest uppercase">
-                    {selectedSymbol ? `Histórico de Sinais: ${selectedSymbol}` : "Selecione um Ativo para ver o Histórico"}
-                  </span>
-                </div>
-                {selectedSymbol && <span className="text-[8px] text-[#4a6080]">ULTIMOS 20</span>}
-              </div>
-              <div className="p-4">
-                {!selectedSymbol ? (
-                  <div className="text-center py-12 bg-[#080c12] border border-dashed border-[#1a2535]">
-                    <p className="text-[9px] text-[#4a6080] uppercase tracking-[2px]">Aguardando seleção de ativo na lista lateral...</p>
-                  </div>
-                ) : signals && signals.length > 0 ? (
-                  <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 scrollbar-hide">
-                    {signals.map((sig) => (
-                      <div key={sig.id} className="bg-[#080c12] border border-[#1a2535] p-3 flex items-center justify-between text-[10px]">
-                        <div className="flex items-center gap-3">
-                          <span className={`w-1 h-6 ${sig.signal === 'BUY' ? 'bg-[#00e676]' : 'bg-[#ff3d57]'}`} />
-                          <div>
-                            <div className="font-bold tracking-wider">{sig.signal} @ ${Number(sig.price).toFixed(2)}</div>
-                            <div className="text-[8px] text-[#4a6080] mt-0.5">
-                              {new Date(sig.createdAt).toLocaleString('pt-PT')}
+                {viewMode === 'history' && (
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2 scrollbar-hide">
+                    {signalsLoading ? (
+                      <div className="flex justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-[#b388ff]" /></div>
+                    ) : globalSignals && globalSignals.length > 0 ? (
+                      globalSignals.map((sig) => (
+                        <div key={sig.id} className="bg-[#080c12] border border-[#1a2535] p-3 flex items-center justify-between text-[10px]">
+                          <div className="flex items-center gap-3">
+                            <span className={`w-1 h-6 ${sig.signal === 'BUY' ? 'bg-[#00e676]' : 'bg-[#ff3d57]'}`} />
+                            <div>
+                              <div className="font-bold tracking-wider">{sig.symbol}: {sig.signal} @ ${Number(sig.price).toFixed(2)}</div>
+                              <div className="text-[8px] text-[#4a6080] mt-0.5">{new Date(sig.createdAt).toLocaleString('pt-PT')}</div>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex gap-4 items-center">
-                          <div className="text-right">
-                            <div className="text-[7px] text-[#4a6080] uppercase">Confiança</div>
-                            <div className="font-bold">{sig.confidence}%</div>
-                          </div>
-                          <div className="px-2 py-0.5 border border-[#1a2535] text-[#4a6080] text-[8px]">
-                            V3_CORE
+                          <div className="flex gap-4 items-center">
+                            <div className="text-right"><div className="text-[7px] text-[#4a6080] uppercase">Confiança</div><div className="font-bold">{sig.confidence}%</div></div>
+                            <div className="px-2 py-0.5 border border-[#1a2535] text-[#4a6080] text-[8px]">V3_CORE</div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    ) : (
+                      <div className="text-center py-12 bg-[#080c12]"><p className="text-[9px] text-[#4a6080] uppercase tracking-widest">Nenhum sinal registado</p></div>
+                    )}
                   </div>
-                ) : (
-                  <div className="text-center py-12 bg-[#080c12]">
-                    <p className="text-[9px] text-[#4a6080] uppercase tracking-widest">Nenhum sinal registado para este ativo</p>
+                )}
+
+                {viewMode === 'assets' && (
+                  <div className="border border-[#1a2535] bg-[#080c12] overflow-hidden">
+                    <table className="w-full text-left text-[10px]">
+                      <thead className="bg-[#111927] border-b border-[#1a2535] text-[#4a6080] uppercase tracking-widest">
+                        <tr>
+                          <th className="px-4 py-2 font-normal">Símbolo</th>
+                          <th className="px-4 py-2 font-normal">Região</th>
+                          <th className="px-4 py-2 font-normal">Status</th>
+                          <th className="px-4 py-2 font-normal text-right">Ações</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#1a2535]">
+                        {symbols?.map((sym) => (
+                          <tr key={sym.symbol} className="hover:bg-[#0d1420] transition-colors">
+                            <td className="px-4 py-3 font-bold tracking-wider">{sym.symbol}</td>
+                            <td className="px-4 py-3 text-[#4a6080]">{sym.region}</td>
+                            <td className="px-4 py-3"><span className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#00e676] rounded-full" /> Ativo</span></td>
+                            <td className="px-4 py-3 text-right">
+                              <button onClick={() => { setSelectedSymbol(sym.symbol); setViewMode('history'); }} className="text-[#00d4ff] hover:underline uppercase text-[8px] tracking-widest">Ver Sinais</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Sidebar: Assets & Config */}
+          {/* Sidebar */}
           <div className="space-y-6">
-            <div className="bg-[#0d1420] border border-[#1a2535]">
-              <div className="px-4 py-2 border-b border-[#1a2535] bg-[#111927]">
-                <div className="flex items-center gap-2">
-                  <Target className="w-3 h-3 text-[#ffd600]" />
-                  <span className="text-[10px] font-bold tracking-widest uppercase">Ativos Monitorizados</span>
-                </div>
-              </div>
-              <div className="p-4">
-                {symbolsLoading ? (
-                  <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-[#4a6080]" /></div>
-                ) : (
-                  <div className="grid grid-cols-2 gap-2">
-                    {symbols?.map((sym) => (
-                      <button
-                        key={sym.symbol}
-                        onClick={() => setSelectedSymbol(sym.symbol)}
-                        className={`p-2 border text-[10px] font-bold tracking-wider transition-all ${
-                          selectedSymbol === sym.symbol 
-                            ? 'bg-[#00d4ff]/10 border-[#00d4ff] text-[#00d4ff]' 
-                            : 'bg-[#080c12] border-[#1a2535] text-[#4a6080] hover:border-[#243047]'
-                        }`}
-                      >
-                        {sym.symbol}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
             <div className="bg-[#0d1420] border border-[#1a2535]">
               <div className="px-4 py-2 border-b border-[#1a2535] bg-[#111927]">
                 <div className="flex items-center gap-2">
@@ -258,28 +268,16 @@ export default function Dashboard() {
               </div>
               <div className="p-4 space-y-4">
                 <div className="space-y-2">
-                  <div className="flex justify-between text-[9px]">
-                    <span className="text-[#4a6080] uppercase">Risco por Trade</span>
-                    <span className="text-[#00e676] font-bold">1.0%</span>
-                  </div>
+                  <div className="flex justify-between text-[9px]"><span className="text-[#4a6080] uppercase">Risco por Trade</span><span className="text-[#00e676] font-bold">1.0%</span></div>
                   <div className="h-1 bg-[#1a2535] w-full"><div className="h-full bg-[#00e676] w-[10%]" /></div>
                 </div>
                 <div className="space-y-2">
-                  <div className="flex justify-between text-[9px]">
-                    <span className="text-[#4a6080] uppercase">Rácio R:R</span>
-                    <span className="text-[#00d4ff] font-bold">1:3</span>
-                  </div>
+                  <div className="flex justify-between text-[9px]"><span className="text-[#4a6080] uppercase">Rácio R:R</span><span className="text-[#00d4ff] font-bold">1:3.0</span></div>
                   <div className="h-1 bg-[#1a2535] w-full"><div className="h-full bg-[#00d4ff] w-[33%]" /></div>
                 </div>
                 <div className="pt-2 border-t border-[#1a2535] space-y-1">
-                  <div className="flex items-center gap-2 text-[8px] text-[#4a6080]">
-                    <span className="w-1 h-1 bg-[#00e676] rounded-full" />
-                    TRAILING STOP ATIVO
-                  </div>
-                  <div className="flex items-center gap-2 text-[8px] text-[#4a6080]">
-                    <span className="w-1 h-1 bg-[#00e676] rounded-full" />
-                    BREAKEVEN AUTOMÁTICO
-                  </div>
+                  <div className="flex items-center gap-2 text-[8px] text-[#4a6080]"><span className="w-1 h-1 bg-[#00e676] rounded-full" /> TRAILING STOP ATIVO</div>
+                  <div className="flex items-center gap-2 text-[8px] text-[#4a6080]"><span className="w-1 h-1 bg-[#00e676] rounded-full" /> BREAKEVEN AUTOMÁTICO</div>
                 </div>
               </div>
             </div>
@@ -287,14 +285,10 @@ export default function Dashboard() {
             <div className="bg-[#0d1420] border border-[#1a2535] p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Bell className="w-3 h-3 text-[#00d4ff]" />
-                <span className="text-[10px] font-bold tracking-widest uppercase">Telegram Bot</span>
+                <span className="text-[10px] font-bold tracking-widest uppercase">Notificações Telegram</span>
               </div>
-              <p className="text-[9px] text-[#4a6080] leading-relaxed mb-4">
-                O bot envia alertas instantâneos para o seu Telegram sempre que um novo sinal é gerado ou um trade é atualizado.
-              </p>
-              <Button variant="outline" className="w-full border-[#1a2535] text-[#4a6080] hover:text-[#00d4ff] hover:border-[#00d4ff] text-[8px] uppercase tracking-[2px] h-8 bg-transparent">
-                Testar Conectividade
-              </Button>
+              <p className="text-[9px] text-[#4a6080] leading-relaxed mb-4 uppercase tracking-wider">Bot ativo: Sinais, Fechos e Relatórios Diários (08:00 UTC).</p>
+              <Button variant="outline" className="w-full border-[#1a2535] text-[#4a6080] hover:text-[#00d4ff] hover:border-[#00d4ff] text-[8px] uppercase tracking-[2px] h-8 bg-transparent">Sincronizar Bot</Button>
             </div>
           </div>
         </div>
