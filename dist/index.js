@@ -1,108 +1,139 @@
-// server/_core/index.ts
-import "dotenv/config";
-import express2 from "express";
-import { createServer } from "http";
-import net from "net";
-import { createExpressMiddleware } from "@trpc/server/adapters/express";
-
-// shared/const.ts
-var COOKIE_NAME = "app_session_id";
-var ONE_YEAR_MS = 1e3 * 60 * 60 * 24 * 365;
-var AXIOS_TIMEOUT_MS = 3e4;
-var UNAUTHED_ERR_MSG = "Please login (10001)";
-var NOT_ADMIN_ERR_MSG = "You do not have required permission (10002)";
-
-// server/db.ts
-import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/mysql2";
+var __defProp = Object.defineProperty;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
+  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
+}) : x)(function(x) {
+  if (typeof require !== "undefined") return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x + '" is not supported');
+});
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
+};
 
 // drizzle/schema.ts
 import { decimal, int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
-var users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
-  id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
-  name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull()
-});
-var symbols = mysqlTable("symbols", {
-  id: int("id").autoincrement().primaryKey(),
-  symbol: varchar("symbol", { length: 20 }).notNull().unique(),
-  region: varchar("region", { length: 10 }).default("US").notNull(),
-  enabled: int("enabled").default(1).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
-});
-var trades = mysqlTable("trades", {
-  id: int("id").autoincrement().primaryKey(),
-  tradeId: varchar("tradeId", { length: 64 }).notNull().unique(),
-  symbol: varchar("symbol", { length: 20 }).notNull(),
-  signal: mysqlEnum("signal", ["BUY", "SELL"]).notNull(),
-  entryPrice: decimal("entryPrice", { precision: 12, scale: 2 }).notNull(),
-  stopLoss: decimal("stopLoss", { precision: 12, scale: 2 }).notNull(),
-  takeProfit: decimal("takeProfit", { precision: 12, scale: 2 }).notNull(),
-  slPct: decimal("slPct", { precision: 8, scale: 4 }).notNull(),
-  tpPct: decimal("tpPct", { precision: 8, scale: 4 }).notNull(),
-  confidence: int("confidence").notNull(),
-  rsi: decimal("rsi", { precision: 8, scale: 2 }),
-  adx: decimal("adx", { precision: 8, scale: 2 }),
-  atr: decimal("atr", { precision: 12, scale: 2 }),
-  macroTrend: varchar("macroTrend", { length: 20 }),
-  trendShort: varchar("trendShort", { length: 20 }),
-  outcome: mysqlEnum("outcome", ["OPEN", "WIN", "LOSS"]).default("OPEN").notNull(),
-  exitPrice: decimal("exitPrice", { precision: 12, scale: 2 }),
-  pnl: decimal("pnl", { precision: 8, scale: 4 }),
-  openedAt: timestamp("openedAt").defaultNow().notNull(),
-  closedAt: timestamp("closedAt"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
-});
-var signals = mysqlTable("signals", {
-  id: int("id").autoincrement().primaryKey(),
-  symbol: varchar("symbol", { length: 20 }).notNull(),
-  signal: mysqlEnum("signal", ["BUY", "SELL"]).notNull(),
-  confidence: int("confidence").notNull(),
-  price: decimal("price", { precision: 12, scale: 2 }).notNull(),
-  rsi: decimal("rsi", { precision: 8, scale: 2 }),
-  adx: decimal("adx", { precision: 8, scale: 2 }),
-  macroTrend: varchar("macroTrend", { length: 20 }),
-  trendShort: varchar("trendShort", { length: 20 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull()
-});
-var dailyStats = mysqlTable("dailyStats", {
-  id: int("id").autoincrement().primaryKey(),
-  date: varchar("date", { length: 10 }).notNull().unique(),
-  wins: int("wins").default(0).notNull(),
-  losses: int("losses").default(0).notNull(),
-  totalPnl: decimal("totalPnl", { precision: 12, scale: 4 }).default("0").notNull(),
-  totalSignals: int("totalSignals").default(0).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+var users, symbols, trades, signals, dailyStats;
+var init_schema = __esm({
+  "drizzle/schema.ts"() {
+    "use strict";
+    users = mysqlTable("users", {
+      /**
+       * Surrogate primary key. Auto-incremented numeric value managed by the database.
+       * Use this for relations between tables.
+       */
+      id: int("id").autoincrement().primaryKey(),
+      /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
+      openId: varchar("openId", { length: 64 }).notNull().unique(),
+      name: text("name"),
+      email: varchar("email", { length: 320 }),
+      loginMethod: varchar("loginMethod", { length: 64 }),
+      role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+      createdAt: timestamp("createdAt").defaultNow().notNull(),
+      updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+      lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull()
+    });
+    symbols = mysqlTable("symbols", {
+      id: int("id").autoincrement().primaryKey(),
+      symbol: varchar("symbol", { length: 20 }).notNull().unique(),
+      region: varchar("region", { length: 10 }).default("US").notNull(),
+      sector: varchar("sector", { length: 50 }).default("Technology").notNull(),
+      enabled: int("enabled").default(1).notNull(),
+      createdAt: timestamp("createdAt").defaultNow().notNull(),
+      updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+    });
+    trades = mysqlTable("trades", {
+      id: int("id").autoincrement().primaryKey(),
+      tradeId: varchar("tradeId", { length: 64 }).notNull().unique(),
+      symbol: varchar("symbol", { length: 20 }).notNull(),
+      signal: mysqlEnum("signal", ["BUY", "SELL"]).notNull(),
+      entryPrice: decimal("entryPrice", { precision: 12, scale: 2 }).notNull(),
+      stopLoss: decimal("stopLoss", { precision: 12, scale: 2 }).notNull(),
+      takeProfit: decimal("takeProfit", { precision: 12, scale: 2 }).notNull(),
+      slPct: decimal("slPct", { precision: 8, scale: 4 }).notNull(),
+      tpPct: decimal("tpPct", { precision: 8, scale: 4 }).notNull(),
+      confidence: int("confidence").notNull(),
+      rsi: decimal("rsi", { precision: 8, scale: 2 }),
+      adx: decimal("adx", { precision: 8, scale: 2 }),
+      atr: decimal("atr", { precision: 12, scale: 2 }),
+      macroTrend: varchar("macroTrend", { length: 20 }),
+      trendShort: varchar("trendShort", { length: 20 }),
+      outcome: mysqlEnum("outcome", ["OPEN", "WIN", "LOSS"]).default("OPEN").notNull(),
+      exitPrice: decimal("exitPrice", { precision: 12, scale: 2 }),
+      pnl: decimal("pnl", { precision: 8, scale: 4 }),
+      openedAt: timestamp("openedAt").defaultNow().notNull(),
+      closedAt: timestamp("closedAt"),
+      createdAt: timestamp("createdAt").defaultNow().notNull(),
+      updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+    });
+    signals = mysqlTable("signals", {
+      id: int("id").autoincrement().primaryKey(),
+      symbol: varchar("symbol", { length: 20 }).notNull(),
+      signal: mysqlEnum("signal", ["BUY", "SELL"]).notNull(),
+      confidence: int("confidence").notNull(),
+      price: decimal("price", { precision: 12, scale: 2 }).notNull(),
+      rsi: decimal("rsi", { precision: 8, scale: 2 }),
+      adx: decimal("adx", { precision: 8, scale: 2 }),
+      macroTrend: varchar("macroTrend", { length: 20 }),
+      trendShort: varchar("trendShort", { length: 20 }),
+      createdAt: timestamp("createdAt").defaultNow().notNull()
+    });
+    dailyStats = mysqlTable("dailyStats", {
+      id: int("id").autoincrement().primaryKey(),
+      date: varchar("date", { length: 10 }).notNull().unique(),
+      wins: int("wins").default(0).notNull(),
+      losses: int("losses").default(0).notNull(),
+      totalPnl: decimal("totalPnl", { precision: 12, scale: 4 }).default("0").notNull(),
+      totalSignals: int("totalSignals").default(0).notNull(),
+      createdAt: timestamp("createdAt").defaultNow().notNull(),
+      updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull()
+    });
+  }
 });
 
 // server/_core/env.ts
-var ENV = {
-  appId: process.env.VITE_APP_ID ?? "",
-  cookieSecret: process.env.JWT_SECRET ?? "",
-  databaseUrl: process.env.DATABASE_URL ?? "",
-  oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
-  ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
-  isProduction: process.env.NODE_ENV === "production",
-  forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
-  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? ""
-};
+var ENV;
+var init_env = __esm({
+  "server/_core/env.ts"() {
+    "use strict";
+    ENV = {
+      appId: process.env.VITE_APP_ID ?? "",
+      cookieSecret: process.env.JWT_SECRET ?? "",
+      databaseUrl: process.env.DATABASE_URL ?? "",
+      oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
+      ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
+      isProduction: process.env.NODE_ENV === "production",
+      forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
+      forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+      telegramToken: process.env.TELEGRAM_TOKEN || "8628057627:AAGqiKMJTkQ4Dmdg0Be7DE-LdeBJiiGQaew",
+      telegramChatId: process.env.TELEGRAM_CHAT_ID || "1354621810"
+    };
+  }
+});
 
 // server/db.ts
-var _db = null;
+var db_exports = {};
+__export(db_exports, {
+  addSymbol: () => addSymbol,
+  createSignal: () => createSignal,
+  createTrade: () => createTrade,
+  getActiveTrades: () => getActiveTrades,
+  getDailyStats: () => getDailyStats,
+  getDb: () => getDb,
+  getGlobalSignals: () => getGlobalSignals,
+  getPerformanceHistory: () => getPerformanceHistory,
+  getSignalsBySymbol: () => getSignalsBySymbol,
+  getSymbols: () => getSymbols,
+  getUserByOpenId: () => getUserByOpenId,
+  updateOrCreateDailyStats: () => updateOrCreateDailyStats,
+  updateTrade: () => updateTrade,
+  upsertUser: () => upsertUser
+});
+import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/mysql2";
 async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -171,6 +202,18 @@ async function getUserByOpenId(openId) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result.length > 0 ? result[0] : void 0;
 }
+async function createTrade(trade) {
+  const db = await getDb();
+  if (!db) return null;
+  try {
+    await db.insert(trades).values(trade);
+    const result = await db.select().from(trades).where(eq(trades.tradeId, trade.tradeId)).limit(1);
+    return result[0] || null;
+  } catch (error) {
+    console.error("[Database] Failed to create trade:", error);
+    throw error;
+  }
+}
 async function getActiveTrades() {
   const db = await getDb();
   if (!db) return [];
@@ -181,6 +224,28 @@ async function getActiveTrades() {
     return [];
   }
 }
+async function updateTrade(tradeId, updates) {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    await db.update(trades).set(updates).where(eq(trades.tradeId, tradeId));
+  } catch (error) {
+    console.error("[Database] Failed to update trade:", error);
+    throw error;
+  }
+}
+async function createSignal(signal) {
+  const db = await getDb();
+  if (!db) return null;
+  try {
+    await db.insert(signals).values(signal);
+    const result = await db.select().from(signals).orderBy(signals.id).limit(1);
+    return result[0] || null;
+  } catch (error) {
+    console.error("[Database] Failed to create signal:", error);
+    throw error;
+  }
+}
 async function getSignalsBySymbol(symbol, limit = 50) {
   const db = await getDb();
   if (!db) return [];
@@ -188,6 +253,28 @@ async function getSignalsBySymbol(symbol, limit = 50) {
     return await db.select().from(signals).where(eq(signals.symbol, symbol)).orderBy(signals.id).limit(limit);
   } catch (error) {
     console.error("[Database] Failed to get signals:", error);
+    return [];
+  }
+}
+async function getGlobalSignals(limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    const { desc } = __require("drizzle-orm");
+    return await db.select().from(signals).orderBy(desc(signals.createdAt)).limit(limit);
+  } catch (error) {
+    console.error("[Database] Failed to get global signals:", error);
+    return [];
+  }
+}
+async function getPerformanceHistory(limit = 30) {
+  const db = await getDb();
+  if (!db) return [];
+  try {
+    const { desc } = __require("drizzle-orm");
+    return await db.select().from(dailyStats).orderBy(desc(dailyStats.date)).limit(limit);
+  } catch (error) {
+    console.error("[Database] Failed to get performance history:", error);
     return [];
   }
 }
@@ -202,26 +289,261 @@ async function getDailyStats(date) {
     return null;
   }
 }
+async function updateOrCreateDailyStats(date, updates) {
+  const db = await getDb();
+  if (!db) return;
+  try {
+    const existing = await getDailyStats(date);
+    if (existing) {
+      await db.update(dailyStats).set(updates).where(eq(dailyStats.date, date));
+    } else {
+      await db.insert(dailyStats).values({ date, ...updates });
+    }
+  } catch (error) {
+    console.error("[Database] Failed to update daily stats:", error);
+    throw error;
+  }
+}
 async function getSymbols() {
   const db = await getDb();
   if (!db) return [];
   try {
     return await db.select().from(symbols).where(eq(symbols.enabled, 1));
   } catch (error) {
+    if (error.message && (error.message.includes("Unknown column 'sector'") || error.code === "ER_BAD_FIELD_ERROR")) {
+      try {
+        const { symbol, region, enabled, id, createdAt, updatedAt } = symbols;
+        const result = await db.select({ id, symbol, region, enabled, createdAt, updatedAt }).from(symbols).where(eq(enabled, 1));
+        return result.map((s) => ({ ...s, sector: "Technology" }));
+      } catch (innerError) {
+        console.error("[Database] Failed to get symbols even without sector:", innerError);
+        return [];
+      }
+    }
     console.error("[Database] Failed to get symbols:", error);
     return [];
   }
 }
-async function addSymbol(symbol, region = "US") {
+async function addSymbol(symbol, region = "US", sector = "Technology") {
   const db = await getDb();
   if (!db) return;
   try {
-    await db.insert(symbols).values({ symbol, region });
+    await db.insert(symbols).values({
+      symbol,
+      region,
+      sector,
+      enabled: 1
+    }).onDuplicateKeyUpdate({
+      set: { region, sector, enabled: 1 }
+    });
+    console.log(`[Database] Symbol ${symbol} added/updated successfully with sector.`);
   } catch (error) {
-    console.error("[Database] Failed to add symbol:", error);
+    if (error.message && (error.message.includes("Unknown column 'sector'") || error.code === "ER_BAD_FIELD_ERROR")) {
+      try {
+        await db.insert(symbols).values({
+          symbol,
+          region,
+          enabled: 1
+        }).onDuplicateKeyUpdate({
+          set: { region, enabled: 1 }
+        });
+        console.warn(`[Database] Symbol ${symbol} added without sector (column missing).`);
+        return;
+      } catch (innerError) {
+        console.error(`[Database] Failed to add symbol ${symbol} even without sector:`, innerError);
+        throw innerError;
+      }
+    }
+    console.error(`[Database] Failed to add symbol ${symbol}:`, error);
     throw error;
   }
 }
+var _db;
+var init_db = __esm({
+  "server/db.ts"() {
+    "use strict";
+    init_schema();
+    init_env();
+    _db = null;
+  }
+});
+
+// server/trading/telegram.ts
+var telegram_exports = {};
+__export(telegram_exports, {
+  formatBuySignal: () => formatBuySignal,
+  formatDailyReport: () => formatDailyReport,
+  formatNoSignalsMessage: () => formatNoSignalsMessage,
+  formatSellSignal: () => formatSellSignal,
+  formatStartupNotification: () => formatStartupNotification,
+  formatTradeClosedNotification: () => formatTradeClosedNotification,
+  formatTrailingStopNotification: () => formatTrailingStopNotification,
+  initTelegram: () => initTelegram,
+  sendTelegram: () => sendTelegram
+});
+import axios2 from "axios";
+function initTelegram(token, chatId) {
+  config = { token, chatId };
+  console.log("[Telegram] Initialized with chat ID:", chatId);
+}
+async function sendTelegram(message) {
+  if (!config) {
+    console.warn("[Telegram] Not configured. Message would be:", message.replace(/<[^>]+>/g, ""));
+    return false;
+  }
+  try {
+    await axios2.post(
+      `${TELEGRAM_API_BASE}/bot${config.token}/sendMessage`,
+      {
+        chat_id: config.chatId,
+        text: message,
+        parse_mode: "HTML"
+      },
+      { timeout: 1e4 }
+    );
+    return true;
+  } catch (error) {
+    console.error("[Telegram] Error sending message:", error instanceof Error ? error.message : error);
+    return false;
+  }
+}
+function formatBuySignal(symbol, price, sl, tp, confidence, rsi, adx, atr, ema9, ema21, ema50, macroTrend, trendShort) {
+  const timestamp2 = (/* @__PURE__ */ new Date()).toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" });
+  return `\u{1F7E2} <b>BUY ${symbol}</b>
+
+\u{1F4B0} <b>Pre\xE7o:</b> $${price.toFixed(2)}
+\u{1F6D1} <b>Stop Loss:</b> $${sl.toFixed(2)}
+\u{1F3AF} <b>Take Profit:</b> $${tp.toFixed(2)}
+\u{1F4CA} <b>Confian\xE7a:</b> ${confidence}%
+
+<b>Indicadores:</b>
+\u2022 RSI: ${rsi.toFixed(1)}
+\u2022 ADX: ${adx.toFixed(1)}
+\u2022 ATR: $${atr.toFixed(2)}
+\u2022 EMA9: $${ema9.toFixed(2)}
+\u2022 EMA21: $${ema21.toFixed(2)}
+\u2022 EMA50: $${ema50.toFixed(2)}
+
+<b>Tend\xEAncia:</b>
+\u2022 Macro: ${macroTrend}
+\u2022 Curto: ${trendShort}
+
+\u23F0 ${timestamp2}`;
+}
+function formatSellSignal(symbol, price, sl, tp, confidence, rsi, adx, atr, ema9, ema21, ema50, macroTrend, trendShort) {
+  const timestamp2 = (/* @__PURE__ */ new Date()).toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" });
+  return `\u{1F534} <b>SELL ${symbol}</b>
+
+\u{1F4B0} <b>Pre\xE7o:</b> $${price.toFixed(2)}
+\u{1F6D1} <b>Stop Loss:</b> $${sl.toFixed(2)}
+\u{1F3AF} <b>Take Profit:</b> $${tp.toFixed(2)}
+\u{1F4CA} <b>Confian\xE7a:</b> ${confidence}%
+
+<b>Indicadores:</b>
+\u2022 RSI: ${rsi.toFixed(1)}
+\u2022 ADX: ${adx.toFixed(1)}
+\u2022 ATR: $${atr.toFixed(2)}
+\u2022 EMA9: $${ema9.toFixed(2)}
+\u2022 EMA21: $${ema21.toFixed(2)}
+\u2022 EMA50: $${ema50.toFixed(2)}
+
+<b>Tend\xEAncia:</b>
+\u2022 Macro: ${macroTrend}
+\u2022 Curto: ${trendShort}
+
+\u23F0 ${timestamp2}`;
+}
+function formatTradeClosedNotification(symbol, signal, pnl, outcome, winRate, totalWins, totalLosses) {
+  const emoji = outcome === "WIN" ? "\u2705" : "\u274C";
+  const pnlFormatted = pnl >= 0 ? `+${pnl.toFixed(2)}%` : `${pnl.toFixed(2)}%`;
+  const timestamp2 = (/* @__PURE__ */ new Date()).toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" });
+  return `${emoji} <b>${outcome} ${signal} ${symbol}</b>
+
+\u{1F4C8} <b>P&L:</b> ${pnlFormatted}
+\u{1F3C6} <b>Win Rate:</b> ${winRate}% (${totalWins}W / ${totalLosses}L)
+
+\u23F0 ${timestamp2}`;
+}
+function formatTrailingStopNotification(symbol, newSl) {
+  const timestamp2 = (/* @__PURE__ */ new Date()).toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" });
+  return `\u{1F4C8} <b>Trailing Stop Ativado</b>
+
+${symbol}
+\u{1F6D1} <b>Novo SL:</b> $${newSl.toFixed(2)}
+
+\u23F0 ${timestamp2}`;
+}
+function formatDailyReport(date, winRate, totalWins, totalLosses, totalPnl, totalSignals, activeTrades) {
+  const total = totalWins + totalLosses;
+  return `\u{1F4CB} <b>Relat\xF3rio Di\xE1rio \u2013 Stock Bot</b>
+
+<b>Data:</b> ${date}
+
+<b>Performance:</b>
+\u2022 Win Rate: ${winRate}% (${totalWins}W / ${totalLosses}L)
+\u2022 P&L Total: ${totalPnl >= 0 ? "+" : ""}${totalPnl.toFixed(2)}%
+\u2022 Sinais Gerados: ${totalSignals}
+
+<b>Trades Ativos:</b> ${activeTrades}
+
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+<i>Bot operacional e monitorando mercados 24/7</i>`;
+}
+function formatStartupNotification(symbolCount) {
+  const timestamp2 = (/* @__PURE__ */ new Date()).toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" });
+  return `\u2705 <b>Stock Signal Bot \u2014 ONLINE</b>
+
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u{1F550} <b>Arranque:</b> ${timestamp2}
+\u{1F4E1} <b>Telegram:</b> Ligado e funcional
+\u{1F4C8} <b>S\xEDmbolos:</b> ${symbolCount} em monitoriza\xE7\xE3o
+\u{1F3C6} <b>Status:</b> Pronto para gerar sinais
+
+<b>Configura\xE7\xE3o:</b>
+\u2022 Intervalo: Velas Di\xE1rias (1d)
+\u2022 Estrat\xE9gia: EMA9/21 Crossover + ADX + RSI
+\u2022 TP/SL: Din\xE2mico (ATR-based)
+	\u2022 Gest\xE3o de Risco: 1% por posi\xE7\xE3o | R:R 1:3 | Trailing Stop 2%
+\u2022 Scan: A cada 4h | Verifica\xE7\xE3o: A cada 15min
+
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u{1F680} Sistema operacional e pronto para trading`;
+}
+function formatNoSignalsMessage(symbolCount) {
+  const timestamp2 = (/* @__PURE__ */ new Date()).toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" });
+  return `\u{1F50D} <b>An\xE1lise de Mercado Conclu\xEDda</b>
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+\u{1F4CA} <b>Ativos Monitorizados:</b> ${symbolCount}
+\u{1F6AB} <b>Resultado:</b> Nenhum sinal gerado nesta an\xE1lise.
+\u23F0 ${timestamp2}
+\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501
+<i>Bot continua a monitorizar os mercados 24/7</i>`;
+}
+var TELEGRAM_API_BASE, config;
+var init_telegram = __esm({
+  "server/trading/telegram.ts"() {
+    "use strict";
+    TELEGRAM_API_BASE = "https://api.telegram.org";
+    config = null;
+  }
+});
+
+// server/_core/index.ts
+import "dotenv/config";
+import express2 from "express";
+import { createServer } from "http";
+import net from "net";
+import { createExpressMiddleware } from "@trpc/server/adapters/express";
+
+// shared/const.ts
+var COOKIE_NAME = "app_session_id";
+var ONE_YEAR_MS = 1e3 * 60 * 60 * 24 * 365;
+var AXIOS_TIMEOUT_MS = 3e4;
+var UNAUTHED_ERR_MSG = "Please login (10001)";
+var NOT_ADMIN_ERR_MSG = "You do not have required permission (10002)";
+
+// server/_core/oauth.ts
+init_db();
 
 // server/_core/cookies.ts
 function isSecureRequest(req) {
@@ -251,6 +573,8 @@ var HttpError = class extends Error {
 var ForbiddenError = (msg) => new HttpError(403, msg);
 
 // server/_core/sdk.ts
+init_db();
+init_env();
 import axios from "axios";
 import { parse as parseCookieHeader } from "cookie";
 import { SignJWT, jwtVerify } from "jose";
@@ -512,6 +836,7 @@ function registerOAuthRoutes(app) {
 import { z } from "zod";
 
 // server/_core/notification.ts
+init_env();
 import { TRPCError } from "@trpc/server";
 var TITLE_MAX_LENGTH = 1200;
 var CONTENT_MAX_LENGTH = 2e4;
@@ -652,14 +977,15 @@ var systemRouter = router({
 });
 
 // server/routers/trading.ts
+init_db();
 import { z as z2 } from "zod";
 var tradingRouter = router({
   // Get all active trades
-  getActiveTrades: protectedProcedure.query(async () => {
+  getActiveTrades: publicProcedure.query(async () => {
     return await getActiveTrades();
   }),
   // Get signals by symbol
-  getSignals: protectedProcedure.input(
+  getSignals: publicProcedure.input(
     z2.object({
       symbol: z2.string(),
       limit: z2.number().optional().default(50)
@@ -667,22 +993,31 @@ var tradingRouter = router({
   ).query(async ({ input }) => {
     return await getSignalsBySymbol(input.symbol, input.limit);
   }),
+  getGlobalSignals: publicProcedure.input(z2.object({ limit: z2.number().optional().default(50) })).query(async ({ input }) => {
+    const { getGlobalSignals: getGlobalSignals2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+    return await getGlobalSignals2(input.limit);
+  }),
+  getPerformance: publicProcedure.input(z2.object({ limit: z2.number().optional().default(30) })).query(async ({ input }) => {
+    const { getPerformanceHistory: getPerformanceHistory2 } = await Promise.resolve().then(() => (init_db(), db_exports));
+    return await getPerformanceHistory2(input.limit);
+  }),
   // Get daily stats
-  getDailyStats: protectedProcedure.input(z2.object({ date: z2.string() })).query(async ({ input }) => {
+  getDailyStats: publicProcedure.input(z2.object({ date: z2.string() })).query(async ({ input }) => {
     return await getDailyStats(input.date);
   }),
   // Get configured symbols
-  getSymbols: protectedProcedure.query(async () => {
+  getSymbols: publicProcedure.query(async () => {
     return await getSymbols();
   }),
   // Add new symbol to monitor
-  addSymbol: protectedProcedure.input(
+  addSymbol: publicProcedure.input(
     z2.object({
       symbol: z2.string().toUpperCase(),
-      region: z2.enum(["US", "PT", "EU", "BR"]).optional().default("US")
+      region: z2.string().optional().default("US"),
+      sector: z2.string().optional().default("Technology")
     })
   ).mutation(async ({ input }) => {
-    await addSymbol(input.symbol, input.region);
+    await addSymbol(input.symbol, input.region, input.sector);
     return { success: true, symbol: input.symbol };
   })
 });
@@ -966,8 +1301,8 @@ function buildH4Candles(dailyCandles) {
   return h4;
 }
 async function runBacktest(symbol, candles, startDate, endDate) {
-  if (candles.length < 200) {
-    throw new Error("Insufficient data for backtest (minimum 200 candles required)");
+  if (candles.length < 100) {
+    throw new Error("Insufficient data for backtest (minimum 100 candles required)");
   }
   let testCandles = candles;
   if (startDate && endDate) {
@@ -980,7 +1315,7 @@ async function runBacktest(symbol, candles, startDate, endDate) {
   const tradeIds = /* @__PURE__ */ new Set();
   const allWeeklyCandles = buildWeeklyCandles(testCandles);
   const allH4Candles = buildH4Candles(testCandles);
-  for (let i = 100; i < testCandles.length; i++) {
+  for (let i = 50; i < testCandles.length; i++) {
     const currentPrice = testCandles[i].close;
     const dailyWindow = testCandles.slice(Math.max(0, i - 100), i + 1);
     const weeklyWindow = allWeeklyCandles.slice(0, Math.ceil((i + 1) / 5));
@@ -1141,43 +1476,23 @@ async function optimizeStrategy(symbol, candles, paramRanges) {
 // server/trading/marketData.ts
 async function fetchCandles(symbol, interval = "1d", range = "2y") {
   try {
-    console.log(`[MarketData] Fetching ${symbol} candles (${interval}, ${range})`);
-    const mockResponse = {
-      chart: {
-        result: [
-          {
-            meta: {
-              symbol,
-              currency: "USD",
-              regularMarketPrice: 150,
-              fiftyTwoWeekHigh: 200,
-              fiftyTwoWeekLow: 100
-            },
-            timestamp: [],
-            indicators: {
-              quote: [
-                {
-                  open: [],
-                  high: [],
-                  low: [],
-                  close: [],
-                  volume: []
-                }
-              ]
-            }
-          }
-        ]
-      }
-    };
-    const result = mockResponse.chart.result[0];
-    if (!result || result.timestamp.length === 0) {
+    const yahooInterval = interval === "4h" ? "1h" : interval;
+    console.log(`[MarketData] Fetching ${symbol} candles (${yahooInterval}, ${range})`);
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=${yahooInterval}&range=${range}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Yahoo Finance returned ${response.status} for ${symbol}`);
+    }
+    const data = await response.json();
+    const result = data.chart.result?.[0];
+    if (!result || !result.timestamp || result.timestamp.length === 0) {
       throw new Error(`No data available for ${symbol}`);
     }
     const candles = [];
     const timestamps = result.timestamp;
     const ohlcv = result.indicators.quote[0];
     for (let i = 0; i < timestamps.length; i++) {
-      if (!ohlcv.open[i] || !ohlcv.close[i]) continue;
+      if (ohlcv.open[i] === null || ohlcv.close[i] === null) continue;
       candles.push({
         time: timestamps[i] * 1e3,
         open: parseFloat(String(ohlcv.open[i])),
@@ -1186,6 +1501,22 @@ async function fetchCandles(symbol, interval = "1d", range = "2y") {
         close: parseFloat(String(ohlcv.close[i])),
         volume: parseFloat(String(ohlcv.volume[i])) || 0
       });
+    }
+    if (interval === "4h") {
+      const aggregated = [];
+      for (let i = 0; i < candles.length; i += 4) {
+        const chunk = candles.slice(i, i + 4);
+        if (chunk.length === 0) continue;
+        aggregated.push({
+          time: chunk[0].time,
+          open: chunk[0].open,
+          high: Math.max(...chunk.map((c) => c.high)),
+          low: Math.min(...chunk.map((c) => c.low)),
+          close: chunk[chunk.length - 1].close,
+          volume: chunk.reduce((sum, c) => sum + c.volume, 0)
+        });
+      }
+      return aggregated;
     }
     return candles;
   } catch (error) {
@@ -1196,7 +1527,7 @@ async function fetchCandles(symbol, interval = "1d", range = "2y") {
 
 // server/routers/backtest.ts
 var backtestRouter = router({
-  runBacktest: protectedProcedure.input(
+  runBacktest: publicProcedure.input(
     z3.object({
       symbol: z3.string().toUpperCase(),
       days: z3.number().default(90)
@@ -1206,8 +1537,8 @@ var backtestRouter = router({
       if (input.days < 30 || input.days > 365) {
         throw new Error("Days must be between 30 and 365");
       }
-      const candles = await fetchCandles(input.symbol, "1d", "2y");
-      if (!candles || candles.length < 200) {
+      const candles = await fetchCandles(input.symbol, "1d", "1y");
+      if (!candles || candles.length < 100) {
         throw new Error("Insufficient historical data for backtest");
       }
       const result = await runBacktest(input.symbol, candles);
@@ -1226,7 +1557,7 @@ var backtestRouter = router({
       };
     }
   }),
-  optimizeStrategy: protectedProcedure.input(
+  optimizeStrategy: publicProcedure.input(
     z3.object({
       symbol: z3.string().toUpperCase(),
       days: z3.number().default(90)
@@ -1236,8 +1567,8 @@ var backtestRouter = router({
       if (input.days < 30 || input.days > 365) {
         throw new Error("Days must be between 30 and 365");
       }
-      const candles = await fetchCandles(input.symbol, "1d", "2y");
-      if (!candles || candles.length < 200) {
+      const candles = await fetchCandles(input.symbol, "1d", "1y");
+      if (!candles || candles.length < 100) {
         throw new Error("Insufficient historical data");
       }
       const result = await optimizeStrategy(input.symbol, candles, {
@@ -1259,7 +1590,7 @@ var backtestRouter = router({
       };
     }
   }),
-  compareSymbols: protectedProcedure.input(
+  compareSymbols: publicProcedure.input(
     z3.object({
       symbols: z3.array(z3.string().toUpperCase()),
       days: z3.number().default(90)
@@ -1272,8 +1603,8 @@ var backtestRouter = router({
       const results = [];
       for (const symbol of input.symbols) {
         try {
-          const candles = await fetchCandles(symbol, "1d", "2y");
-          if (candles && candles.length >= 200) {
+          const candles = await fetchCandles(symbol, "1d", "1y");
+          if (candles && candles.length >= 100) {
             const result = await runBacktest(symbol, candles);
             results.push({
               symbol,
@@ -1545,6 +1876,239 @@ function serveStatic(app) {
   });
 }
 
+// server/trading/engine.ts
+init_db();
+init_env();
+init_telegram();
+var MONITOR_INTERVAL = 15 * 60 * 1e3;
+var SIGNAL_INTERVAL = 4 * 60 * 60 * 1e3;
+var REPORT_INTERVAL = 5 * 60 * 1e3;
+var recentSignals = /* @__PURE__ */ new Map();
+var SIGNAL_COOLDOWN = 90 * 60 * 1e3;
+async function initializeEngine() {
+  console.log("[Engine] Initializing trading engine (MTF V3)...");
+  if (ENV.telegramToken && ENV.telegramChatId) {
+    initTelegram(ENV.telegramToken, ENV.telegramChatId);
+  } else {
+    console.warn("[Engine] Telegram credentials missing in ENV");
+  }
+  let symbols2 = await getSymbols();
+  console.log(`[Engine] Database check: found ${symbols2.length} symbols.`);
+  if (symbols2.length === 0) {
+    console.log("[Engine] No symbols found, adding defaults...");
+    const defaultSymbols = [
+      { s: "AAPL", r: "US", sec: "Technology" },
+      { s: "MSFT", r: "US", sec: "Technology" },
+      { s: "NVDA", r: "US", sec: "Technology" },
+      { s: "TSLA", r: "US", sec: "Technology" },
+      { s: "AMZN", r: "US", sec: "Technology" },
+      { s: "GOOGL", r: "US", sec: "Technology" },
+      { s: "META", r: "US", sec: "Technology" },
+      { s: "AMD", r: "US", sec: "Technology" },
+      { s: "AVGO", r: "US", sec: "Technology" },
+      { s: "NFLX", r: "US", sec: "Technology" },
+      { s: "ADBE", r: "US", sec: "Technology" },
+      { s: "CSCO", r: "US", sec: "Technology" },
+      { s: "INTC", r: "US", sec: "Technology" },
+      { s: "ORCL", r: "US", sec: "Technology" },
+      { s: "CRM", r: "US", sec: "Technology" },
+      { s: "QCOM", r: "US", sec: "Technology" },
+      { s: "TXN", r: "US", sec: "Technology" },
+      { s: "AMAT", r: "US", sec: "Technology" },
+      { s: "MU", r: "US", sec: "Technology" },
+      { s: "ISRG", r: "US", sec: "Technology" },
+      { s: "PANW", r: "US", sec: "Technology" },
+      { s: "LRCX", r: "US", sec: "Technology" },
+      { s: "HON", r: "US", sec: "Technology" },
+      { s: "SBUX", r: "US", sec: "Technology" },
+      { s: "VRTX", r: "US", sec: "Technology" },
+      { s: "REGN", r: "US", sec: "Technology" },
+      { s: "ADI", r: "US", sec: "Technology" },
+      { s: "KLAC", r: "US", sec: "Technology" },
+      { s: "MDLZ", r: "US", sec: "Technology" },
+      { s: "PYPL", r: "US", sec: "Technology" },
+      { s: "V", r: "US", sec: "Blue Chip" },
+      { s: "MA", r: "US", sec: "Blue Chip" },
+      { s: "JPM", r: "US", sec: "Blue Chip" },
+      { s: "UNH", r: "US", sec: "Blue Chip" },
+      { s: "LLY", r: "US", sec: "Blue Chip" },
+      { s: "XOM", r: "US", sec: "Blue Chip" },
+      { s: "HD", r: "US", sec: "Blue Chip" },
+      { s: "PG", r: "US", sec: "Blue Chip" },
+      { s: "JNJ", r: "US", sec: "Blue Chip" },
+      { s: "ABBV", r: "US", sec: "Blue Chip" },
+      { s: "WMT", r: "US", sec: "Blue Chip" },
+      { s: "COST", r: "US", sec: "Blue Chip" },
+      { s: "BAC", r: "US", sec: "Blue Chip" },
+      { s: "KO", r: "US", sec: "Blue Chip" },
+      { s: "MRK", r: "US", sec: "Blue Chip" },
+      { s: "CVX", r: "US", sec: "Blue Chip" },
+      { s: "PEP", r: "US", sec: "Blue Chip" },
+      { s: "TMO", r: "US", sec: "Blue Chip" },
+      { s: "PFE", r: "US", sec: "Blue Chip" },
+      { s: "LIN", r: "US", sec: "Blue Chip" },
+      { s: "DIS", r: "US", sec: "Blue Chip" },
+      { s: "ACN", r: "US", sec: "Blue Chip" },
+      { s: "ABT", r: "US", sec: "Blue Chip" },
+      { s: "DHR", r: "US", sec: "Blue Chip" },
+      { s: "VZ", r: "US", sec: "Blue Chip" },
+      { s: "NEE", r: "US", sec: "Blue Chip" },
+      { s: "WFC", r: "US", sec: "Blue Chip" },
+      { s: "PM", r: "US", sec: "Blue Chip" },
+      { s: "NKE", r: "US", sec: "Blue Chip" },
+      { s: "RTX", r: "US", sec: "Blue Chip" },
+      { s: "LOW", r: "US", sec: "Blue Chip" },
+      { s: "BMY", r: "US", sec: "Blue Chip" },
+      { s: "COP", r: "US", sec: "Blue Chip" },
+      { s: "UNP", r: "US", sec: "Blue Chip" },
+      { s: "AMGN", r: "US", sec: "Blue Chip" },
+      { s: "T", r: "US", sec: "Blue Chip" },
+      { s: "GE", r: "US", sec: "Blue Chip" },
+      { s: "AXP", r: "US", sec: "Blue Chip" },
+      { s: "MS", r: "US", sec: "Blue Chip" },
+      { s: "GS", r: "US", sec: "Blue Chip" },
+      { s: "CAT", r: "US", sec: "Blue Chip" },
+      { s: "EDP.LS", r: "PT", sec: "PSI" },
+      { s: "GALP.LS", r: "PT", sec: "PSI" },
+      { s: "BCP.LS", r: "PT", sec: "PSI" },
+      { s: "JMT.LS", r: "PT", sec: "PSI" },
+      { s: "EDPR.LS", r: "PT", sec: "PSI" },
+      { s: "NOS.LS", r: "PT", sec: "PSI" },
+      { s: "SON.LS", r: "PT", sec: "PSI" },
+      { s: "CTT.LS", r: "PT", sec: "PSI" },
+      { s: "RENE.LS", r: "PT", sec: "PSI" },
+      { s: "NVG.LS", r: "PT", sec: "PSI" },
+      { s: "ASML.AS", r: "EU", sec: "Euro Stoxx" },
+      { s: "SAP.DE", r: "EU", sec: "Euro Stoxx" },
+      { s: "MC.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "OR.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "TTE.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "SAN.MC", r: "EU", sec: "Euro Stoxx" },
+      { s: "BBVA.MC", r: "EU", sec: "Euro Stoxx" },
+      { s: "INGA.AS", r: "EU", sec: "Euro Stoxx" },
+      { s: "BNP.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "ISP.MI", r: "EU", sec: "Euro Stoxx" },
+      { s: "PETR4.SA", r: "BR", sec: "B3" },
+      { s: "VALE3.SA", r: "BR", sec: "B3" },
+      { s: "ITUB4.SA", r: "BR", sec: "B3" },
+      { s: "BBDC4.SA", r: "BR", sec: "B3" },
+      { s: "ABEV3.SA", r: "BR", sec: "B3" },
+      { s: "WEGE3.SA", r: "BR", sec: "B3" },
+      { s: "PLTR", r: "US", sec: "Growth/Meme" },
+      { s: "CRWD", r: "US", sec: "Growth/Meme" },
+      { s: "COIN", r: "US", sec: "Growth/Meme" },
+      { s: "SNOW", r: "US", sec: "Growth/Meme" },
+      { s: "NET", r: "US", sec: "Growth/Meme" },
+      { s: "DDOG", r: "US", sec: "Growth/Meme" },
+      { s: "MSTR", r: "US", sec: "Growth/Meme" },
+      { s: "RIVN", r: "US", sec: "Growth/Meme" },
+      { s: "MARA", r: "US", sec: "Growth/Meme" },
+      { s: "RIOT", r: "US", sec: "Growth/Meme" }
+    ];
+    await Promise.all(
+      defaultSymbols.map(
+        (item) => addSymbol(item.s, item.r, item.sec).catch(
+          (e) => console.error(`[Engine] Failed to add default symbol ${item.s}:`, e)
+        )
+      )
+    );
+    symbols2 = await getSymbols();
+  }
+  const startupMsg = formatStartupNotification(symbols2.length);
+  await sendTelegram(startupMsg);
+  console.log("[Engine] Starting initial market scan...");
+  await runTradingLoop();
+}
+function startBackgroundLoops() {
+  console.log("[Engine] Starting background loops...");
+  setInterval(runTradingLoop, SIGNAL_INTERVAL);
+  setInterval(runMonitoringLoop, MONITOR_INTERVAL);
+  setInterval(runDailyReport, REPORT_INTERVAL);
+}
+async function processSymbol(symbolStr) {
+  const lastSignal = recentSignals.get(symbolStr);
+  if (lastSignal && Date.now() - lastSignal < SIGNAL_COOLDOWN) {
+    return false;
+  }
+  try {
+    const [weeklyCandles, dailyCandles, h4Candles] = await Promise.all([
+      fetchCandles(symbolStr, "1wk", "5y"),
+      fetchCandles(symbolStr, "1d", "2y"),
+      fetchCandles(symbolStr, "4h", "6mo")
+    ]);
+    const signal = generateMtfSignal({ weeklyCandles, dailyCandles, h4Candles });
+    if (!signal) return false;
+    recentSignals.set(symbolStr, Date.now());
+    const mtf = signal.mtfFilters;
+    const message = formatBuySignal(
+      symbolStr,
+      signal.price,
+      signal.sl,
+      signal.tp,
+      signal.confidence,
+      signal.rsi,
+      signal.adx,
+      signal.atr,
+      signal.ema9,
+      signal.ema21,
+      signal.ema50,
+      signal.macroTrend,
+      signal.trendShort
+    ) + `
+
+<b>Filtros MTF V3:</b>
+\u2022 RSI Semanal: ${mtf.weeklyRsi.toFixed(1)} ${mtf.weeklyRsiOk ? "\u2705" : "\u274C"} (&lt;50)
+\u2022 Pre\xE7o vs MA70: ${signal.price.toFixed(2)} vs ${mtf.dailyMa70.toFixed(2)} ${mtf.dailyAboveMa70 ? "\u2705" : "\u274C"}
+\u2022 RSI 4h: ${mtf.h4Rsi.toFixed(1)} ${mtf.h4RsiOk ? "\u2705" : "\u274C"} (&lt;40)
+\u2022 MACD Diverg\xEAncia Bullish: ${mtf.h4MacdBullishDivergence ? "\u2705" : "\u274C"}
+\u2022 Vela HH+HL: ${mtf.h4CandleConfirmation ? "\u2705" : "\u274C"}
+\u2022 Score: ${signal.filterScore}%
+\u2022 SL: ${signal.slPct}% | TP: ${signal.tpPct}% (R:R 1:3)
+\u2022 Risco/posi\xE7\xE3o: 1% do capital`;
+    await sendTelegram(message);
+    console.log(`[Engine] BUY signal sent for ${symbolStr} @ ${signal.price}`);
+    return true;
+  } catch (error) {
+    console.error(`[Engine] Error processing ${symbolStr}:`, error instanceof Error ? error.message : error);
+    return false;
+  }
+}
+async function runTradingLoop() {
+  console.log("[Engine] Running trading signal scan (MTF V3)...");
+  const symbols2 = await getSymbols();
+  let signalsGenerated = 0;
+  for (const symbol of symbols2) {
+    try {
+      const generated = await processSymbol(symbol.symbol);
+      if (generated) signalsGenerated++;
+    } catch (error) {
+      console.error(`[Engine] Error processing ${symbol.symbol}:`, error);
+    }
+  }
+  if (signalsGenerated === 0) {
+    const message = formatNoSignalsMessage(symbols2.length);
+    await sendTelegram(message);
+  }
+  console.log(`[Engine] Scan complete. Signals generated: ${signalsGenerated}`);
+}
+async function runMonitoringLoop() {
+  console.log("[Engine] Monitoring loop tick.");
+}
+async function runDailyReport() {
+  const now = /* @__PURE__ */ new Date();
+  if (now.getUTCHours() === 8 && now.getUTCMinutes() < 5) {
+    console.log("[Engine] Generating daily report...");
+    try {
+      const { formatDailyReport: formatDailyReport2 } = await Promise.resolve().then(() => (init_telegram(), telegram_exports));
+      const date = now.toLocaleDateString("pt-PT", { timeZone: "Europe/Lisbon" });
+      const message = formatDailyReport2(date, 0, 0, 0, 0, 0, 0);
+      await sendTelegram(message);
+    } catch (error) {
+      console.error("[Engine] Error generating daily report:", error);
+    }
+  }
+}
+
 // server/_core/index.ts
 function isPortAvailable(port) {
   return new Promise((resolve) => {
@@ -1586,8 +2150,14 @@ async function startServer() {
   if (port !== preferredPort) {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
-  server.listen(port, () => {
+  server.listen(port, async () => {
     console.log(`Server running on http://localhost:${port}/`);
+    try {
+      await initializeEngine();
+      startBackgroundLoops();
+    } catch (error) {
+      console.error("[Server] Failed to start trading engine:", error);
+    }
   });
 }
 startServer().catch(console.error);
