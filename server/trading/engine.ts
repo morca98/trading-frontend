@@ -1,102 +1,237 @@
-/**
- * Trading Engine
- * Main orchestrator for signal generation, trade monitoring, and reporting.
- *
- * Estratégia de sinal (Multi-Timeframe V3):
- *  1. RSI Semanal < 50  → espaço macro para subir
- *  2. Preço Diário > MA70 → tendência de médio prazo bullish
- *  3. RSI 4h < 40       → pullback / sobrevenda intraday
- *  4. MACD 4h divergência bullish → momentum a recuperar
- *  5. Vela 4h de confirmação: High > High anterior E Low > Low anterior
- */
-
-import {
-  getActiveTrades,
-  createTrade,
-  updateTrade,
-  createSignal,
-  getDailyStats,
-  updateOrCreateDailyStats,
-  getSymbols,
-  addSymbol,
-} from "../db";
-import { calcATR, Candle } from "./technicalAnalysis";
-import { fetchCandles, fetchPrice, determineMacroTrend } from "./marketData";
-import { generateMtfSignal, MultiTimeframeData } from "./technicalAnalysisV3";
-import {
-  initTelegram,
-  sendTelegram,
-  formatBuySignal,
-  formatSellSignal,
-  formatTradeClosedNotification,
-  formatTrailingStopNotification,
-  formatBreakevenNotification,
-  formatDailyReport,
-  formatStartupNotification,
-  formatNoSignalsMessage,
-} from "./telegram";
+import { getSymbols, addSymbol } from "../db";
+import { processSymbol } from "./engine";
 import { ENV } from "../_core/env";
+import { initTelegram } from "./telegram";
 
-const SIGNAL_COOLDOWN = 90 * 60 * 1000;       // 90 minutos
-const MONITOR_INTERVAL = 4 * 60 * 60 * 1000;  // 4 horas
-const TRADE_CHECK_INTERVAL = 15 * 60 * 1000;  // 15 minutos
-const DAILY_REPORT_INTERVAL = 5 * 60 * 1000;  // 5 minutos
-const RISK_PER_TRADE = 0.01;                   // 1% de risco por posição
+const MONITOR_INTERVAL = 15 * 60 * 1000; // 15 minutes
+const SIGNAL_INTERVAL = 4 * 60 * 60 * 1000; // 4 hours
+const REPORT_INTERVAL = 5 * 60 * 1000; // 5 minutes check for 08:00 UTC
+export const RISK_PER_TRADE = 0.01; // 1% risk per position
 
-interface LastSignalTracker {
-  [symbol: string]: {
-    signal: "BUY" | "SELL" | null;
-    time: number;
-    date: string;
-  };
-}
-
-const lastSignals: LastSignalTracker = {};
-
-// ---------------------------------------------------------------------------
-// Inicialização
-// ---------------------------------------------------------------------------
-
-export async function initializeEngine(): Promise<void> {
-  console.log("[Engine] Initializing trading engine (MTF V3)...");
-
-  // Initialize Telegram if credentials are provided
+export async function initializeEngine() {
+  console.log("[Engine] Initializing trading engine...");
+  
+  // Initialize Telegram
   if (ENV.telegramToken && ENV.telegramChatId) {
     initTelegram(ENV.telegramToken, ENV.telegramChatId);
   } else {
-    console.warn("[Engine] Telegram credentials not found in environment variables");
+    console.warn("[Engine] Telegram credentials missing in ENV");
   }
 
   let symbols = await getSymbols();
   console.log(`[Engine] Database check: found ${symbols.length} symbols.`);
   
-  // If no symbols are configured, add some defaults from environment or common ones
   if (symbols.length === 0) {
     console.log("[Engine] No symbols found in database, adding defaults...");
     const defaultSymbols = [
       { s: "AAPL", r: "US", sec: "Technology" },
       { s: "MSFT", r: "US", sec: "Technology" },
-      { s: "GOOGL", r: "US", sec: "Technology" },
-      { s: "AMZN", r: "US", sec: "Consumer Discretionary" },
       { s: "NVDA", r: "US", sec: "Technology" },
-      { s: "TSLA", r: "US", sec: "Consumer Discretionary" },
-      { s: "META", r: "US", sec: "Communication Services" },
-      { s: "EDP.LS", r: "PT", sec: "Utilities" },
-      { s: "JMT.LS", r: "PT", sec: "Consumer Staples" },
-      { s: "GALP.LS", r: "PT", sec: "Energy" },
-      { s: "BCP.LS", r: "PT", sec: "Financials" },
-      { s: "NOS.LS", r: "PT", sec: "Communication Services" },
-      // Brasil (B3)
-      { s: "PETR4.SA", r: "BR", sec: "Energy" },
-      { s: "VALE3.SA", r: "BR", sec: "Materials" },
-      { s: "ITUB4.SA", r: "BR", sec: "Financials" },
-      { s: "BBDC4.SA", r: "BR", sec: "Financials" },
-      { s: "ABEV3.SA", r: "BR", sec: "Consumer Staples" },
-      { s: "BBAS3.SA", r: "BR", sec: "Financials" },
-      { s: "B3SA3.SA", r: "BR", sec: "Financials" },
-      { s: "RENT3.SA", r: "BR", sec: "Industrials" },
-      { s: "WEGE3.SA", r: "BR", sec: "Industrials" },
-      { s: "SUZB3.SA", r: "BR", sec: "Materials" },
+      { s: "TSLA", r: "US", sec: "Technology" },
+      { s: "AMZN", r: "US", sec: "Technology" },
+      { s: "GOOGL", r: "US", sec: "Technology" },
+      { s: "META", r: "US", sec: "Technology" },
+      { s: "AMD", r: "US", sec: "Technology" },
+      { s: "AVGO", r: "US", sec: "Technology" },
+      { s: "NFLX", r: "US", sec: "Technology" },
+      { s: "ADBE", r: "US", sec: "Technology" },
+      { s: "CSCO", r: "US", sec: "Technology" },
+      { s: "INTC", r: "US", sec: "Technology" },
+      { s: "ORCL", r: "US", sec: "Technology" },
+      { s: "CRM", r: "US", sec: "Technology" },
+      { s: "QCOM", r: "US", sec: "Technology" },
+      { s: "TXN", r: "US", sec: "Technology" },
+      { s: "AMAT", r: "US", sec: "Technology" },
+      { s: "MU", r: "US", sec: "Technology" },
+      { s: "ISRG", r: "US", sec: "Technology" },
+      { s: "PANW", r: "US", sec: "Technology" },
+      { s: "LRCX", r: "US", sec: "Technology" },
+      { s: "HON", r: "US", sec: "Technology" },
+      { s: "SBUX", r: "US", sec: "Technology" },
+      { s: "VRTX", r: "US", sec: "Technology" },
+      { s: "REGN", r: "US", sec: "Technology" },
+      { s: "ADI", r: "US", sec: "Technology" },
+      { s: "KLAC", r: "US", sec: "Technology" },
+      { s: "MDLZ", r: "US", sec: "Technology" },
+      { s: "PYPL", r: "US", sec: "Technology" },
+      { s: "V", r: "US", sec: "Blue Chip" },
+      { s: "MA", r: "US", sec: "Blue Chip" },
+      { s: "JPM", r: "US", sec: "Blue Chip" },
+      { s: "UNH", r: "US", sec: "Blue Chip" },
+      { s: "LLY", r: "US", sec: "Blue Chip" },
+      { s: "XOM", r: "US", sec: "Blue Chip" },
+      { s: "HD", r: "US", sec: "Blue Chip" },
+      { s: "PG", r: "US", sec: "Blue Chip" },
+      { s: "JNJ", r: "US", sec: "Blue Chip" },
+      { s: "ABBV", r: "US", sec: "Blue Chip" },
+      { s: "WMT", r: "US", sec: "Blue Chip" },
+      { s: "COST", r: "US", sec: "Blue Chip" },
+      { s: "BAC", r: "US", sec: "Blue Chip" },
+      { s: "KO", r: "US", sec: "Blue Chip" },
+      { s: "MRK", r: "US", sec: "Blue Chip" },
+      { s: "CVX", r: "US", sec: "Blue Chip" },
+      { s: "PEP", r: "US", sec: "Blue Chip" },
+      { s: "TMO", r: "US", sec: "Blue Chip" },
+      { s: "PFE", r: "US", sec: "Blue Chip" },
+      { s: "LIN", r: "US", sec: "Blue Chip" },
+      { s: "DIS", r: "US", sec: "Blue Chip" },
+      { s: "ACN", r: "US", sec: "Blue Chip" },
+      { s: "ABT", r: "US", sec: "Blue Chip" },
+      { s: "DHR", r: "US", sec: "Blue Chip" },
+      { s: "VZ", r: "US", sec: "Blue Chip" },
+      { s: "NEE", r: "US", sec: "Blue Chip" },
+      { s: "WFC", r: "US", sec: "Blue Chip" },
+      { s: "PM", r: "US", sec: "Blue Chip" },
+      { s: "NKE", r: "US", sec: "Blue Chip" },
+      { s: "RTX", r: "US", sec: "Blue Chip" },
+      { s: "LOW", r: "US", sec: "Blue Chip" },
+      { s: "BMY", r: "US", sec: "Blue Chip" },
+      { s: "COP", r: "US", sec: "Blue Chip" },
+      { s: "UNP", r: "US", sec: "Blue Chip" },
+      { s: "AMGN", r: "US", sec: "Blue Chip" },
+      { s: "T", r: "US", sec: "Blue Chip" },
+      { s: "GE", r: "US", sec: "Blue Chip" },
+      { s: "AXP", r: "US", sec: "Blue Chip" },
+      { s: "MS", r: "US", sec: "Blue Chip" },
+      { s: "GS", r: "US", sec: "Blue Chip" },
+      { s: "CAT", r: "US", sec: "Blue Chip" },
+      { s: "EDP.LS", r: "PT", sec: "PSI" },
+      { s: "GALP.LS", r: "PT", sec: "PSI" },
+      { s: "BCP.LS", r: "PT", sec: "PSI" },
+      { s: "JMT.LS", r: "PT", sec: "PSI" },
+      { s: "EDPR.LS", r: "PT", sec: "PSI" },
+      { s: "NOS.LS", r: "PT", sec: "PSI" },
+      { s: "SON.LS", r: "PT", sec: "PSI" },
+      { s: "CTT.LS", r: "PT", sec: "PSI" },
+      { s: "RENE.LS", r: "PT", sec: "PSI" },
+      { s: "NVG.LS", r: "PT", sec: "PSI" },
+      { s: "ALTR.LS", r: "PT", sec: "PSI" },
+      { s: "SEM.LS", r: "PT", sec: "PSI" },
+      { s: "COR.LS", r: "PT", sec: "PSI" },
+      { s: "EGL.LS", r: "PT", sec: "PSI" },
+      { s: "IBS.LS", r: "PT", sec: "PSI" },
+      { s: "NBA.LS", r: "PT", sec: "PSI" },
+      { s: "PHR.LS", r: "PT", sec: "PSI" },
+      { s: "ASML.AS", r: "EU", sec: "Euro Stoxx" },
+      { s: "SAP.DE", r: "EU", sec: "Euro Stoxx" },
+      { s: "MC.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "OR.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "TTE.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "SAN.MC", r: "EU", sec: "Euro Stoxx" },
+      { s: "BBVA.MC", r: "EU", sec: "Euro Stoxx" },
+      { s: "INGA.AS", r: "EU", sec: "Euro Stoxx" },
+      { s: "BNP.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "ISP.MI", r: "EU", sec: "Euro Stoxx" },
+      { s: "ENI.MI", r: "EU", sec: "Euro Stoxx" },
+      { s: "ENEL.MI", r: "EU", sec: "Euro Stoxx" },
+      { s: "DAI.DE", r: "EU", sec: "Euro Stoxx" },
+      { s: "BMW.DE", r: "EU", sec: "Euro Stoxx" },
+      { s: "BAS.DE", r: "EU", sec: "Euro Stoxx" },
+      { s: "ALV.DE", r: "EU", sec: "Euro Stoxx" },
+      { s: "DTE.DE", r: "EU", sec: "Euro Stoxx" },
+      { s: "AIR.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "AI.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "CS.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "DG.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "BN.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "IBE.MC", r: "EU", sec: "Euro Stoxx" },
+      { s: "ABI.BR", r: "EU", sec: "Euro Stoxx" },
+      { s: "ADS.DE", r: "EU", sec: "Euro Stoxx" },
+      { s: "BAYN.DE", r: "EU", sec: "Euro Stoxx" },
+      { s: "VOW3.DE", r: "EU", sec: "Euro Stoxx" },
+      { s: "PRX.AS", r: "EU", sec: "Euro Stoxx" },
+      { s: "RMS.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "KER.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "SAF.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "EL.PA", r: "EU", sec: "Euro Stoxx" },
+      { s: "AD.AS", r: "EU", sec: "Euro Stoxx" },
+      { s: "CRH.L", r: "EU", sec: "Euro Stoxx" },
+      { s: "STLAM.MI", r: "EU", sec: "Euro Stoxx" },
+      { s: "MBG.DE", r: "EU", sec: "Euro Stoxx" },
+      { s: "DHL.DE", r: "EU", sec: "Euro Stoxx" },
+      { s: "IFX.DE", r: "EU", sec: "Euro Stoxx" },
+      { s: "SIE.DE", r: "EU", sec: "Euro Stoxx" },
+      { s: "MUV2.DE", r: "EU", sec: "Euro Stoxx" },
+      { s: "PETR4.SA", r: "BR", sec: "B3" },
+      { s: "VALE3.SA", r: "BR", sec: "B3" },
+      { s: "ITUB4.SA", r: "BR", sec: "B3" },
+      { s: "BBDC4.SA", r: "BR", sec: "B3" },
+      { s: "ABEV3.SA", r: "BR", sec: "B3" },
+      { s: "BBAS3.SA", r: "BR", sec: "B3" },
+      { s: "B3SA3.SA", r: "BR", sec: "B3" },
+      { s: "ITSAS4.SA", r: "BR", sec: "B3" },
+      { s: "WEGE3.SA", r: "BR", sec: "B3" },
+      { s: "JBSS3.SA", r: "BR", sec: "B3" },
+      { s: "SUZB3.SA", r: "BR", sec: "B3" },
+      { s: "RENT3.SA", r: "BR", sec: "B3" },
+      { s: "GGBR4.SA", r: "BR", sec: "B3" },
+      { s: "CSNA3.SA", r: "BR", sec: "B3" },
+      { s: "LREN3.SA", r: "BR", sec: "B3" },
+      { s: "MGLU3.SA", r: "BR", sec: "B3" },
+      { s: "PRIO3.SA", r: "BR", sec: "B3" },
+      { s: "UGPA3.SA", r: "BR", sec: "B3" },
+      { s: "VIVT3.SA", r: "BR", sec: "B3" },
+      { s: "RADL3.SA", r: "BR", sec: "B3" },
+      { s: "SBSP3.SA", r: "BR", sec: "B3" },
+      { s: "RAIL3.SA", r: "BR", sec: "B3" },
+      { s: "EQTL3.SA", r: "BR", sec: "B3" },
+      { s: "RDOR3.SA", r: "BR", sec: "B3" },
+      { s: "ELET3.SA", r: "BR", sec: "B3" },
+      { s: "CPFE3.SA", r: "BR", sec: "B3" },
+      { s: "CCRO3.SA", r: "BR", sec: "B3" },
+      { s: "CMIG4.SA", r: "BR", sec: "B3" },
+      { s: "CSAN3.SA", r: "BR", sec: "B3" },
+      { s: "BRFS3.SA", r: "BR", sec: "B3" },
+      { s: "SMCI", r: "US", sec: "Growth/Meme" },
+      { s: "MSTR", r: "US", sec: "Growth/Meme" },
+      { s: "VRT", r: "US", sec: "Growth/Meme" },
+      { s: "CELH", r: "US", sec: "Growth/Meme" },
+      { s: "ELF", r: "US", sec: "Growth/Meme" },
+      { s: "DECK", r: "US", sec: "Growth/Meme" },
+      { s: "ANF", r: "US", sec: "Growth/Meme" },
+      { s: "COIN", r: "US", sec: "Growth/Meme" },
+      { s: "DKNG", r: "US", sec: "Growth/Meme" },
+      { s: "SKX", r: "US", sec: "Growth/Meme" },
+      { s: "AAL", r: "US", sec: "Growth/Meme" },
+      { s: "DAL", r: "US", sec: "Growth/Meme" },
+      { s: "UAL", r: "US", sec: "Growth/Meme" },
+      { s: "SAVE", r: "US", sec: "Growth/Meme" },
+      { s: "NCLH", r: "US", sec: "Growth/Meme" },
+      { s: "RCL", r: "US", sec: "Growth/Meme" },
+      { s: "CCL", r: "US", sec: "Growth/Meme" },
+      { s: "HOOD", r: "US", sec: "Growth/Meme" },
+      { s: "SOFI", r: "US", sec: "Growth/Meme" },
+      { s: "AFRM", r: "US", sec: "Growth/Meme" },
+      { s: "UPST", r: "US", sec: "Growth/Meme" },
+      { s: "PLTR", r: "US", sec: "Growth/Meme" },
+      { s: "AI", r: "US", sec: "Growth/Meme" },
+      { s: "PATH", r: "US", sec: "Growth/Meme" },
+      { s: "SNOW", r: "US", sec: "Growth/Meme" },
+      { s: "NET", r: "US", sec: "Growth/Meme" },
+      { s: "CRWD", r: "US", sec: "Growth/Meme" },
+      { s: "ZS", r: "US", sec: "Growth/Meme" },
+      { s: "OKTA", r: "US", sec: "Growth/Meme" },
+      { s: "MDB", r: "US", sec: "Growth/Meme" },
+      { s: "DDOG", r: "US", sec: "Growth/Meme" },
+      { s: "GME", r: "US", sec: "Growth/Meme" },
+      { s: "AMC", r: "US", sec: "Growth/Meme" },
+      { s: "KOSS", r: "US", sec: "Growth/Meme" },
+      { s: "BB", r: "US", sec: "Growth/Meme" },
+      { s: "RIVN", r: "US", sec: "Growth/Meme" },
+      { s: "LCID", r: "US", sec: "Growth/Meme" },
+      { s: "NKLA", r: "US", sec: "Growth/Meme" },
+      { s: "QS", r: "US", sec: "Growth/Meme" },
+      { s: "PLUG", r: "US", sec: "Growth/Meme" },
+      { s: "FCEL", r: "US", sec: "Growth/Meme" },
+      { s: "BLDP", r: "US", sec: "Growth/Meme" },
+      { s: "SPCE", r: "US", sec: "Growth/Meme" },
+      { s: "FUBO", r: "US", sec: "Growth/Meme" },
+      { s: "OPEN", r: "US", sec: "Growth/Meme" },
+      { s: "CHPT", r: "US", sec: "Growth/Meme" },
+      { s: "RUN", r: "US", sec: "Growth/Meme" },
+      { s: "SUNW", r: "US", sec: "Growth/Meme" },
+      { s: "MARA", r: "US", sec: "Growth/Meme" },
+      { s: "RIOT", r: "US", sec: "Growth/Meme" },
     ];
     console.log(`[Engine] Adding ${defaultSymbols.length} default symbols...`);
     // Use Promise.all to add symbols faster
@@ -108,318 +243,62 @@ export async function initializeEngine(): Promise<void> {
     
     // RE-FETCH SYMBOLS TO ENSURE UI LOADS THEM
     symbols = await getSymbols();
-    console.log(`[Engine] Verification after addition: ${symbols.length} symbols in DB.`);
   }
-  
-  console.log(`[Engine] Loaded ${symbols.length} symbols for monitoring`);
 
-  symbols.forEach((sym) => {
-    lastSignals[sym.symbol] = { signal: null, time: 0, date: "" };
-  });
+  // Initial scan on startup
+  console.log("[Engine] Starting initial market scan...");
+  runTradingLoop();
 
-  const sent = await sendTelegram(formatStartupNotification(symbols.length));
-  if (sent) {
-    console.log("[Engine] Startup notification sent to Telegram.");
-  } else {
-    console.warn("[Engine] Telegram notification failed. Check token/chatId.");
-  }
-  console.log("[Engine] Trading engine initialized");
+  // Setup intervals
+  setInterval(runTradingLoop, SIGNAL_INTERVAL);
+  setInterval(runMonitoringLoop, MONITOR_INTERVAL);
+  setInterval(runDailyReport, REPORT_INTERVAL);
 }
 
-// ---------------------------------------------------------------------------
-// Loop principal
-// ---------------------------------------------------------------------------
-
-export async function runTradingLoop(): Promise<void> {
-  console.log("[Engine] Running trading loop (MTF V3)...");
-
+async function runTradingLoop() {
+  console.log("[Engine] Running trading signal scan...");
   const symbols = await getSymbols();
   let signalsGenerated = 0;
-
-  for (const sym of symbols) {
+  
+  for (const symbol of symbols) {
     try {
-      const created = await processSymbol(sym.symbol);
-      if (created) signalsGenerated++;
+      const result = await processSymbol(symbol.symbol);
+      if (result) signalsGenerated++;
     } catch (error) {
-      console.error(`[Engine] Error processing ${sym.symbol}:`, error);
+      console.error(`[Engine] Error processing ${symbol.symbol}:`, error);
     }
   }
-
-  // Se nenhum sinal foi gerado em toda a lista, enviar notificação informativa
-  if (signalsGenerated === 0 && symbols.length > 0) {
-    await sendTelegram(formatNoSignalsMessage(symbols.length));
-  }
-
-  console.log(`[Engine] Trading loop completed. Signals generated: ${signalsGenerated}`);
-}
-
-// ---------------------------------------------------------------------------
-// Processamento de símbolo
-// ---------------------------------------------------------------------------
-
-async function processSymbol(symbol: string): Promise<boolean> {
-  try {
-    // Buscar candles nos três timeframes em paralelo
-    const [weeklyCandles, dailyCandles, h4Candles] = await Promise.all([
-      fetchCandles(symbol, "1wk", "5y"),   // Semanal — para RSI semanal
-      fetchCandles(symbol, "1d", "2y"),    // Diário  — para MA70
-      fetchCandles(symbol, "4h", "6mo"),   // 4 horas — para RSI, MACD e confirmação de vela
-    ]);
-
-    if (dailyCandles.length === 0) {
-      console.log(`[Engine] No data for ${symbol}`);
-      return false;
-    }
-
-    // Montar estrutura multi-timeframe
-    const mtfData: MultiTimeframeData = {
-      weeklyCandles,
-      dailyCandles,
-      h4Candles,
-    };
-
-    // Gerar sinal com filtros MTF V3
-    const result = generateMtfSignal(mtfData);
-
-    if (!result) {
-      console.log(`[Engine] ${symbol}: No MTF signal`);
-      return false;
-    }
-
-    if (result.confidence < 65) {
-      console.log(`[Engine] ${symbol}: Signal below confidence threshold (${result.confidence}%)`);
-      return false;
-    }
-
-    // Verificar cooldown
-    const now = Date.now();
-    const lastSignal = lastSignals[symbol] ?? { signal: null, time: 0, date: "" };
-    if (lastSignal.signal === result.signal && now - lastSignal.time < SIGNAL_COOLDOWN) {
-      console.log(`[Engine] ${symbol}: Cooldown active`);
-      return false;
-    }
-
-    // Verificar limite diário
-    const today = new Date().toISOString().slice(0, 10);
-    if (lastSignal.date === today && lastSignal.signal === result.signal) {
-      console.log(`[Engine] ${symbol}: Daily limit reached for ${result.signal}`);
-      return false;
-    }
-
-    // Registar trade
-    const tradeId = `${symbol}_${now}`;
-    const currentPrice = result.price;
-
-    await createTrade({
-      tradeId,
-      symbol,
-      signal: result.signal as "BUY" | "SELL",
-      entryPrice: String(currentPrice) as any,
-      stopLoss: String(result.sl) as any,
-      takeProfit: String(result.tp) as any,
-      slPct: String(result.slPct) as any,
-      tpPct: String(result.tpPct) as any,
-      confidence: result.confidence,
-      rsi: String(result.rsi) as any,
-      adx: String(result.adx) as any,
-      atr: String(result.atr) as any,
-      macroTrend: result.macroTrend,
-      trendShort: result.trendShort,
-      outcome: "OPEN",
-    });
-
-    await createSignal({
-      symbol,
-      signal: result.signal as "BUY" | "SELL",
-      confidence: result.confidence,
-      price: String(currentPrice) as any,
-      rsi: String(result.rsi) as any,
-      adx: String(result.adx) as any,
-      macroTrend: result.macroTrend,
-      trendShort: result.trendShort,
-    });
-
-    // Atualizar tracker
-    lastSignals[symbol] = { signal: result.signal, time: now, date: today };
-
-    // Enviar notificação Telegram com detalhes MTF
-    const mtf = result.mtfFilters;
-    const mtfDetails =
-      `\n📊 *Filtros MTF:*` +
-      `\n• RSI Semanal: ${mtf.weeklyRsi} ${mtf.weeklyRsiOk ? "✅" : "❌"} (< 50)` +
-      `\n• Preço Diário vs MA70: ${mtf.dailyClose} vs ${mtf.dailyMa70} ${mtf.dailyAboveMa70 ? "✅" : "❌"}` +
-      `\n• RSI 4h: ${mtf.h4Rsi} ${mtf.h4RsiOk ? "✅" : "❌"} (< 40)` +
-      `\n• MACD Divergência Bullish: ${mtf.h4MacdBullishDivergence ? "✅" : "❌"}` +
-      `\n• Vela 4h HH+HL: ${mtf.h4CandleConfirmation ? "✅" : "❌"} (H:${mtf.h4HigherHigh ? "↑" : "↓"} L:${mtf.h4HigherLow ? "↑" : "↓"})`;
-
-    const message =
-      result.signal === "BUY"
-        ? formatBuySignal(
-            symbol,
-            currentPrice,
-            result.sl,
-            result.tp,
-            result.confidence,
-            result.rsi,
-            result.adx,
-            result.atr,
-            result.ema9,
-            result.ema21,
-            result.ema50,
-            result.macroTrend,
-            result.trendShort
-          ) + mtfDetails
-        : formatSellSignal(
-            symbol,
-            currentPrice,
-            result.sl,
-            result.tp,
-            result.confidence,
-            result.rsi,
-            result.adx,
-            result.atr,
-            result.ema9,
-            result.ema21,
-            result.ema50,
-            result.macroTrend,
-            result.trendShort
-          ) + mtfDetails;
-
+  
+  // If no signals were found, notify Telegram
+  if (signalsGenerated === 0) {
+    const { sendTelegram, formatNoSignalsMessage } = await import("./telegram");
+    const message = formatNoSignalsMessage(symbols.length);
     await sendTelegram(message);
-    console.log(
-      `[Engine] ${symbol}: ${result.signal} signal (MTF V3) conf=${result.confidence}% | ` +
-      `wRSI=${mtf.weeklyRsi} dMA70=${mtf.dailyAboveMa70} h4RSI=${mtf.h4Rsi} ` +
-      `macdDiv=${mtf.h4MacdBullishDivergence} conf=${mtf.h4CandleConfirmation}`
-    );
+  }
+  
+  console.log(`[Engine] Trading scan complete. Signals generated: ${signalsGenerated}`);
+}
 
-    return true;
+async function runMonitoringLoop() {
+  console.log("[Engine] Running trade monitoring loop...");
+  const { monitorTrades } = await import("./engine");
+  try {
+    await monitorTrades();
   } catch (error) {
-    console.error(`[Engine] Error processing ${symbol}:`, error);
-    return false;
+    console.error("[Engine] Error in monitoring loop:", error);
   }
 }
 
-// ---------------------------------------------------------------------------
-// Monitorização de trades ativos
-// ---------------------------------------------------------------------------
-
-export async function monitorActiveTrades(): Promise<void> {
-  const trades = await getActiveTrades();
-
-  for (const trade of trades) {
+async function runDailyReport() {
+  const now = new Date();
+  // Run daily report at 08:00 UTC
+  if (now.getUTCHours() === 8 && now.getUTCMinutes() < 5) {
+    console.log("[Engine] Generating daily report...");
+    const { sendDailyReport } = await import("./telegram");
     try {
-      const price = await fetchPrice(trade.symbol);
-      let closed = false;
-      let pnl = 0;
-      let outcome = "";
-
-      if (trade.signal === "BUY") {
-        const profitPct = ((price - Number(trade.entryPrice)) / Number(trade.entryPrice)) * 100;
-
-        // Trailing stop a +2%
-        if (profitPct >= 2.0 && Number(trade.stopLoss) < Number(trade.entryPrice) * 1.01) {
-          const newSl = Number(trade.entryPrice) * 1.01;
-          await updateTrade(trade.tradeId, { stopLoss: String(newSl) as any });
-          await sendTelegram(formatTrailingStopNotification(trade.symbol, newSl));
-        }
-
-        if (price <= Number(trade.stopLoss)) {
-          pnl = ((price - Number(trade.entryPrice)) / Number(trade.entryPrice)) * 100;
-          outcome = pnl >= 0 ? "WIN" : "LOSS";
-          closed = true;
-        }
-        if (price >= Number(trade.takeProfit)) {
-          pnl = ((price - Number(trade.entryPrice)) / Number(trade.entryPrice)) * 100;
-          outcome = "WIN";
-          closed = true;
-        }
-      } else {
-        // SELL
-        const profitPct = ((Number(trade.entryPrice) - price) / Number(trade.entryPrice)) * 100;
-
-        if (profitPct >= 2.0 && Number(trade.stopLoss) > Number(trade.entryPrice) * 0.99) {
-          const newSl = Number(trade.entryPrice) * 0.99;
-          await updateTrade(trade.tradeId, { stopLoss: String(newSl) as any });
-          await sendTelegram(formatTrailingStopNotification(trade.symbol, newSl));
-        }
-
-        if (price >= Number(trade.stopLoss)) {
-          pnl = ((Number(trade.entryPrice) - price) / Number(trade.entryPrice)) * 100;
-          outcome = pnl >= 0 ? "WIN" : "LOSS";
-          closed = true;
-        }
-        if (price <= Number(trade.takeProfit)) {
-          pnl = ((Number(trade.entryPrice) - price) / Number(trade.entryPrice)) * 100;
-          outcome = "WIN";
-          closed = true;
-        }
-      }
-
-      if (closed) {
-        await updateTrade(trade.tradeId, {
-          outcome: outcome === "WIN" ? "WIN" : "LOSS",
-          exitPrice: String(price) as any,
-          pnl: String(pnl) as any,
-          closedAt: new Date(),
-        });
-
-        const today = new Date().toISOString().slice(0, 10);
-        const stats = await getDailyStats(today);
-        const wins = (stats?.wins || 0) + (outcome === "WIN" ? 1 : 0);
-        const losses = (stats?.losses || 0) + (outcome === "LOSS" ? 1 : 0);
-        const totalPnl = String((Number(stats?.totalPnl) || 0) + pnl) as any;
-
-        await updateOrCreateDailyStats(today, { wins, losses, totalPnl });
-
-        const winRate = wins + losses > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
-        await sendTelegram(
-          formatTradeClosedNotification(trade.symbol, trade.signal, pnl, outcome, winRate, wins, losses)
-        );
-      }
+      await sendDailyReport();
     } catch (error) {
-      console.error(`[Engine] Error monitoring ${trade.symbol}:`, error);
+      console.error("[Engine] Error generating daily report:", error);
     }
   }
-}
-
-// ---------------------------------------------------------------------------
-// Relatório diário
-// ---------------------------------------------------------------------------
-
-export async function sendDailyReport(): Promise<void> {
-  const now = new Date();
-  const hours = now.getUTCHours();
-  const minutes = now.getUTCMinutes();
-
-  // Enviar às 08:00 UTC (09:00 Lisboa)
-  if (hours !== 8 || minutes > 5) return;
-
-  const today = new Date().toISOString().slice(0, 10);
-  const stats = await getDailyStats(today);
-  const trades = await getActiveTrades();
-
-  const wins = stats?.wins || 0;
-  const losses = stats?.losses || 0;
-  const winRate = wins + losses > 0 ? Math.round((wins / (wins + losses)) * 100) : 0;
-  const totalPnl = Number(stats?.totalPnl) || 0;
-
-  await sendTelegram(
-    formatDailyReport(today, winRate, wins, losses, totalPnl, stats?.totalSignals || 0, trades.length)
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Loops em background
-// ---------------------------------------------------------------------------
-
-export function startBackgroundLoops(): void {
-  console.log("[Engine] Starting background loops (MTF V3)...");
-
-  setInterval(runTradingLoop, MONITOR_INTERVAL);
-  runTradingLoop(); // Executar imediatamente
-
-  setInterval(monitorActiveTrades, TRADE_CHECK_INTERVAL);
-  setInterval(sendDailyReport, DAILY_REPORT_INTERVAL);
-
-  console.log("[Engine] Background loops started");
 }
