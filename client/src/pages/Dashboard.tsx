@@ -10,7 +10,10 @@ export default function Dashboard() {
   const [viewMode, setViewMode] = useState<'active' | 'history' | 'assets'>('active');
 
   const { data: activeTrades, isLoading: tradesLoading } = trpc.trading.getActiveTrades.useQuery(undefined, { refetchInterval: 30000 });
-  const { data: symbols, isLoading: symbolsLoading } = trpc.trading.getSymbols.useQuery();
+  const { data: symbols, isLoading: symbolsLoading, error: symbolsError } = trpc.trading.getSymbols.useQuery();
+  if (symbolsError) {
+    console.error("[Dashboard] Error loading symbols:", symbolsError);
+  }
   const { data: globalSignals, isLoading: signalsLoading } = trpc.trading.getGlobalSignals.useQuery({ limit: 50 }, { refetchInterval: 60000 });
   const { data: performanceData } = trpc.trading.getPerformance.useQuery({ limit: 30 }, { refetchInterval: 60000 });
   
@@ -257,17 +260,19 @@ export default function Dashboard() {
                       <tbody className="divide-y divide-[#1a2535]">
                         {symbolsLoading ? (
                           <tr><td colSpan={4} className="px-4 py-8 text-center"><Loader2 className="w-4 h-4 animate-spin mx-auto" /></td></tr>
+                        ) : symbolsError ? (
+                          <tr><td colSpan={4} className="px-4 py-8 text-center text-red-500 uppercase text-[8px]">Erro ao carregar dados do servidor</td></tr>
                         ) : symbols && symbols.length > 0 ? (
                           symbols.map((sym) => (
                             <tr key={sym.symbol} className="hover:bg-[#0d1420] transition-colors">
                               <td className="px-4 py-3 font-bold tracking-wider text-[#00d4ff]">{sym.symbol}</td>
-                              <td className="px-4 py-3 text-[#c8d8f0] uppercase tracking-tighter">{(sym as any).sector || 'Technology'}</td>
+                              <td className="px-4 py-3 text-[#c8d8f0] uppercase tracking-tighter">{sym.sector || 'Technology'}</td>
                               <td className="px-4 py-3 text-[#4a6080]">{sym.region}</td>
                               <td className="px-4 py-3"><span className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-[#00e676] rounded-full" /> LIVE</span></td>
                             </tr>
                           ))
                         ) : (
-                          <tr><td colSpan={4} className="px-4 py-8 text-center text-[#4a6080]">Nenhum ativo configurado</td></tr>
+                          <tr><td colSpan={4} className="px-4 py-8 text-center text-[#4a6080] uppercase text-[8px] tracking-widest py-12">Nenhum ativo configurado no motor</td></tr>
                         )}
                       </tbody>
                     </table>

@@ -217,9 +217,18 @@ export async function addSymbol(symbol: string, region: string = "US", sector: s
   const db = await getDb();
   if (!db) return;
   try {
-    await db.insert(symbols).values({ symbol, region, sector });
+    // Use onDuplicateKeyUpdate to avoid unique constraint errors and ensure data is fresh
+    await db.insert(symbols).values({ 
+      symbol, 
+      region, 
+      sector, 
+      enabled: 1 
+    }).onDuplicateKeyUpdate({
+      set: { region, sector, enabled: 1 }
+    });
+    console.log(`[Database] Symbol ${symbol} added/updated successfully.`);
   } catch (error) {
-    console.error("[Database] Failed to add symbol:", error);
+    console.error(`[Database] Failed to add symbol ${symbol}:`, error);
     throw error;
   }
 }
