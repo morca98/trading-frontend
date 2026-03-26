@@ -218,7 +218,8 @@ export function formatStartupNotification(symbolCount: number): string {
 • Intervalo: Velas Diárias (1d)
 • Estratégia: EMA9/21 Crossover + ADX + RSI
 • TP/SL: Dinâmico (ATR-based)
-	• Gestão de Risco: 1% por posição | R:R 1:3 | Trailing Stop 2%
+	• Gestão de Risco: 1% por posição | R:R 1:3
+	• Capital Inicial: $10.000
 • Scan: A cada 4h | Verificação: A cada 15min
 
 ━━━━━━━━━━━━━━━━━━━━━━

@@ -8,6 +8,7 @@ const MONITOR_INTERVAL  = 15 * 60 * 1000;      // 15 minutos
 const SIGNAL_INTERVAL   = 4 * 60 * 60 * 1000;  // 4 horas
 const REPORT_INTERVAL   = 5 * 60 * 1000;        // 5 minutos (para verificar as 08:00 UTC)
 
+export const INITIAL_CAPITAL = 10000;
 export const RISK_PER_TRADE = 0.01; // 1% de risco por posição
 
 // ── Registo de sinais recentes (evitar duplicados) ────────────────────────────
@@ -229,7 +230,8 @@ export async function processSymbol(symbolStr: string): Promise<boolean> {
       `• Vela HH+HL: ${mtf.h4CandleConfirmation ? "✅" : "❌"}\n` +
       `• Score: ${signal.filterScore}%\n` +
       `• SL: ${signal.slPct}% | TP: ${signal.tpPct}% (R:R 1:3)\n` +
-      `• Risco/posição: 1% do capital`;
+      `• Capital Inicial: $${INITIAL_CAPITAL}\n` +
+      `• Risco/posição: 1% ($${(INITIAL_CAPITAL * RISK_PER_TRADE).toFixed(2)})`;
 
     await sendTelegram(message);
     console.log(`[Engine] BUY signal sent for ${symbolStr} @ ${signal.price}`);
@@ -274,7 +276,7 @@ async function runTradingLoop(): Promise<void> {
 // ── Loop de monitorização de trades abertos ───────────────────────────────────
 
 async function runMonitoringLoop(): Promise<void> {
-  // Monitorização de trailing stop e breakeven — sem trades abertos em DB por agora
+  // Monitorização de trades — lógica de trailing stop e breakeven removida a pedido do utilizador
   console.log("[Engine] Monitoring loop tick.");
 }
 
