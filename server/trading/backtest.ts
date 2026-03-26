@@ -133,8 +133,8 @@ export async function runBacktest(
   startDate?: number,
   endDate?: number
 ): Promise<{ trades: BacktestTrade[]; metrics: BacktestMetrics }> {
-  if (candles.length < 200) {
-    throw new Error("Insufficient data for backtest (minimum 200 candles required)");
+  if (candles.length < 100) {
+    throw new Error("Insufficient data for backtest (minimum 100 candles required)");
   }
 
   // Filtrar por intervalo de datas
@@ -154,7 +154,7 @@ export async function runBacktest(
   const allH4Candles = buildH4Candles(testCandles);
 
   // Simular trading
-  for (let i = 100; i < testCandles.length; i++) {
+  for (let i = 50; i < testCandles.length; i++) {
     const currentPrice = testCandles[i].close;
 
     // Janelas para cada timeframe

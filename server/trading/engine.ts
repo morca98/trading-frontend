@@ -97,6 +97,7 @@ export async function initializeEngine(): Promise<void> {
         console.error(`[Engine] Failed to add default symbol ${item.s}:`, e);
       }
     }
+    // RE-FETCH SYMBOLS TO ENSURE UI LOADS THEM
     symbols = await getSymbols();
   }
   
@@ -106,7 +107,12 @@ export async function initializeEngine(): Promise<void> {
     lastSignals[sym.symbol] = { signal: null, time: 0, date: "" };
   });
 
-  await sendTelegram(formatStartupNotification(symbols.length));
+  const sent = await sendTelegram(formatStartupNotification(symbols.length));
+  if (sent) {
+    console.log("[Engine] Startup notification sent to Telegram.");
+  } else {
+    console.warn("[Engine] Telegram notification failed. Check token/chatId.");
+  }
   console.log("[Engine] Trading engine initialized");
 }
 

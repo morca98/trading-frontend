@@ -17,9 +17,9 @@ export const backtestRouter = router({
           throw new Error("Days must be between 30 and 365");
         }
 
-        const candles = await fetchCandles(input.symbol, "1d", "2y");
+        const candles = await fetchCandles(input.symbol, "1d", "1y");
 
-        if (!candles || candles.length < 200) {
+        if (!candles || candles.length < 100) {
           throw new Error("Insufficient historical data for backtest");
         }
 
@@ -54,9 +54,9 @@ export const backtestRouter = router({
           throw new Error("Days must be between 30 and 365");
         }
 
-        const candles = await fetchCandles(input.symbol, "1d", "2y");
+        const candles = await fetchCandles(input.symbol, "1d", "1y");
 
-        if (!candles || candles.length < 200) {
+        if (!candles || candles.length < 100) {
           throw new Error("Insufficient historical data");
         }
 
@@ -98,8 +98,8 @@ export const backtestRouter = router({
 
         for (const symbol of input.symbols) {
           try {
-            const candles = await fetchCandles(symbol, "1d", "2y");
-            if (candles && candles.length >= 200) {
+            const candles = await fetchCandles(symbol, "1d", "1y");
+            if (candles && candles.length >= 100) {
               const result = await runBacktest(symbol, candles);
               results.push({
                 symbol,
