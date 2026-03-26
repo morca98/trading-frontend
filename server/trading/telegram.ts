@@ -237,3 +237,17 @@ export function formatStartupNotification(symbolCount: number): string {
 ━━━━━━━━━━━━━━━━━━━━━━
 🚀 Sistema operacional e pronto para trading`;
 }
+
+/**
+ * Format no signals found notification
+ */
+export function formatNoSignalsMessage(symbolCount: number): string {
+  const timestamp = new Date().toLocaleString("pt-PT", { timeZone: "Europe/Lisbon" });
+  return `🔍 <b>Análise de Mercado Concluída</b>
+━━━━━━━━━━━━━━━━━━━━━━
+📊 <b>Ativos Monitorizados:</b> ${symbolCount}
+🚫 <b>Resultado:</b> Nenhum sinal gerado nesta análise.
+⏰ ${timestamp}
+━━━━━━━━━━━━━━━━━━━━━━
+<i>Bot continua a monitorizar os mercados 24/7</i>`;
+}

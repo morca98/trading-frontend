@@ -33,6 +33,7 @@ import {
   formatBreakevenNotification,
   formatDailyReport,
   formatStartupNotification,
+  formatNoSignalsMessage,
 } from "./telegram";
 import { ENV } from "../_core/env";
 
@@ -100,23 +101,30 @@ export async function runTradingLoop(): Promise<void> {
   console.log("[Engine] Running trading loop (MTF V3)...");
 
   const symbols = await getSymbols();
+  let signalsGenerated = 0;
 
   for (const sym of symbols) {
     try {
-      await processSymbol(sym.symbol);
+      const created = await processSymbol(sym.symbol);
+      if (created) signalsGenerated++;
     } catch (error) {
       console.error(`[Engine] Error processing ${sym.symbol}:`, error);
     }
   }
 
-  console.log("[Engine] Trading loop completed");
+  // Se nenhum sinal foi gerado em toda a lista, enviar notificação informativa
+  if (signalsGenerated === 0 && symbols.length > 0) {
+    await sendTelegram(formatNoSignalsMessage(symbols.length));
+  }
+
+  console.log(`[Engine] Trading loop completed. Signals generated: ${signalsGenerated}`);
 }
 
 // ---------------------------------------------------------------------------
 // Processamento de símbolo
 // ---------------------------------------------------------------------------
 
-async function processSymbol(symbol: string): Promise<void> {
+async function processSymbol(symbol: string): Promise<boolean> {
   try {
     // Buscar candles nos três timeframes em paralelo
     const [weeklyCandles, dailyCandles, h4Candles] = await Promise.all([
@@ -127,7 +135,7 @@ async function processSymbol(symbol: string): Promise<void> {
 
     if (dailyCandles.length === 0) {
       console.log(`[Engine] No data for ${symbol}`);
-      return;
+      return false;
     }
 
     // Montar estrutura multi-timeframe
@@ -142,12 +150,12 @@ async function processSymbol(symbol: string): Promise<void> {
 
     if (!result) {
       console.log(`[Engine] ${symbol}: No MTF signal`);
-      return;
+      return false;
     }
 
     if (result.confidence < 65) {
       console.log(`[Engine] ${symbol}: Signal below confidence threshold (${result.confidence}%)`);
-      return;
+      return false;
     }
 
     // Verificar cooldown
@@ -155,14 +163,14 @@ async function processSymbol(symbol: string): Promise<void> {
     const lastSignal = lastSignals[symbol] ?? { signal: null, time: 0, date: "" };
     if (lastSignal.signal === result.signal && now - lastSignal.time < SIGNAL_COOLDOWN) {
       console.log(`[Engine] ${symbol}: Cooldown active`);
-      return;
+      return false;
     }
 
     // Verificar limite diário
     const today = new Date().toISOString().slice(0, 10);
     if (lastSignal.date === today && lastSignal.signal === result.signal) {
       console.log(`[Engine] ${symbol}: Daily limit reached for ${result.signal}`);
-      return;
+      return false;
     }
 
     // Registar trade
@@ -246,12 +254,15 @@ async function processSymbol(symbol: string): Promise<void> {
 
     await sendTelegram(message);
     console.log(
-      `[Engine] ${symbol}: BUY signal (MTF V3) conf=${result.confidence}% | ` +
+      `[Engine] ${symbol}: ${result.signal} signal (MTF V3) conf=${result.confidence}% | ` +
       `wRSI=${mtf.weeklyRsi} dMA70=${mtf.dailyAboveMa70} h4RSI=${mtf.h4Rsi} ` +
-      `MACDdiv=${mtf.h4MacdBullishDivergence} candle=${mtf.h4CandleConfirmation}`
+      `macdDiv=${mtf.h4MacdBullishDivergence} conf=${mtf.h4CandleConfirmation}`
     );
+
+    return true;
   } catch (error) {
     console.error(`[Engine] Error processing ${symbol}:`, error);
+    return false;
   }
 }
 
