@@ -68,6 +68,7 @@ export async function initializeEngine(): Promise<void> {
   }
 
   let symbols = await getSymbols();
+  console.log(`[Engine] Database check: found ${symbols.length} symbols.`);
   
   // If no symbols are configured, add some defaults from environment or common ones
   if (symbols.length === 0) {

@@ -207,7 +207,19 @@ export async function getSymbols(): Promise<Symbol[]> {
   if (!db) return [];
   try {
     return await db.select().from(symbols).where(eq(symbols.enabled, 1));
-  } catch (error) {
+  } catch (error: any) {
+    // If sector column is missing, try selecting without it
+    if (error.message && (error.message.includes("Unknown column 'sector'") || error.code === 'ER_BAD_FIELD_ERROR')) {
+      try {
+        const { symbol, region, enabled, id, createdAt, updatedAt } = symbols;
+        const result = await db.select({ id, symbol, region, enabled, createdAt, updatedAt }).from(symbols).where(eq(enabled, 1));
+        // Map back to Symbol type with default sector
+        return result.map(s => ({ ...s, sector: 'Technology' })) as Symbol[];
+      } catch (innerError) {
+        console.error("[Database] Failed to get symbols even without sector:", innerError);
+        return [];
+      }
+    }
     console.error("[Database] Failed to get symbols:", error);
     return [];
   }
@@ -217,7 +229,7 @@ export async function addSymbol(symbol: string, region: string = "US", sector: s
   const db = await getDb();
   if (!db) return;
   try {
-    // Use onDuplicateKeyUpdate to avoid unique constraint errors and ensure data is fresh
+    // Attempt with sector first
     await db.insert(symbols).values({ 
       symbol, 
       region, 
@@ -226,8 +238,25 @@ export async function addSymbol(symbol: string, region: string = "US", sector: s
     }).onDuplicateKeyUpdate({
       set: { region, sector, enabled: 1 }
     });
-    console.log(`[Database] Symbol ${symbol} added/updated successfully.`);
-  } catch (error) {
+    console.log(`[Database] Symbol ${symbol} added/updated successfully with sector.`);
+  } catch (error: any) {
+    // Fallback if sector column is missing
+    if (error.message && (error.message.includes("Unknown column 'sector'") || error.code === 'ER_BAD_FIELD_ERROR')) {
+      try {
+        await db.insert(symbols).values({ 
+          symbol, 
+          region, 
+          enabled: 1 
+        } as any).onDuplicateKeyUpdate({
+          set: { region, enabled: 1 } as any
+        });
+        console.warn(`[Database] Symbol ${symbol} added without sector (column missing).`);
+        return;
+      } catch (innerError) {
+        console.error(`[Database] Failed to add symbol ${symbol} even without sector:`, innerError);
+        throw innerError;
+      }
+    }
     console.error(`[Database] Failed to add symbol ${symbol}:`, error);
     throw error;
   }
