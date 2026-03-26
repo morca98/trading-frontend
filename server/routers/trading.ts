@@ -68,10 +68,22 @@ export const tradingRouter = router({
 
   // Sync Telegram: Send a test message to verify connection
   syncTelegram: publicProcedure.mutation(async () => {
-    const { sendTelegram, formatStartupNotification } = await import("../trading/telegram");
+    const { sendTelegram, formatStartupNotification, initTelegram } = await import("../trading/telegram");
+    const { ENV } = await import("../_core/env");
+    
+    // Re-initialize to ensure config is fresh
+    if (ENV.telegramToken && ENV.telegramChatId) {
+      initTelegram(ENV.telegramToken, ENV.telegramChatId);
+    }
+    
     const symbols = await getSymbols();
     const message = formatStartupNotification(symbols.length);
-    const success = await sendTelegram(message + "\n\n🔄 *Sincronização Manual Realizada*");
-    return { success };
+    const success = await sendTelegram(message + "\n\n🔄 <b>Sincronização Manual Realizada</b>");
+    
+    if (!success) {
+      throw new Error("Falha ao enviar mensagem para o Telegram. Verifique o Token e Chat ID.");
+    }
+    
+    return { success: true };
   }),
 });

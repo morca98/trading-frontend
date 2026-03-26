@@ -91,15 +91,17 @@ export async function initializeEngine(): Promise<void> {
       { s: "BNBUSDT", r: "CRYPTO", sec: "Crypto" },
       { s: "SOLUSDT", r: "CRYPTO", sec: "Crypto" }
     ];
-    for (const item of defaultSymbols) {
-      try {
-        await addSymbol(item.s, item.r, item.sec);
-      } catch (e) {
-        console.error(`[Engine] Failed to add default symbol ${item.s}:`, e);
-      }
-    }
+    console.log(`[Engine] Adding ${defaultSymbols.length} default symbols...`);
+    // Use Promise.all to add symbols faster
+    await Promise.all(defaultSymbols.map(item => 
+      addSymbol(item.s, item.r, item.sec).catch(e => 
+        console.error(`[Engine] Failed to add default symbol ${item.s}:`, e)
+      )
+    ));
+    
     // RE-FETCH SYMBOLS TO ENSURE UI LOADS THEM
     symbols = await getSymbols();
+    console.log(`[Engine] Verification after addition: ${symbols.length} symbols in DB.`);
   }
   
   console.log(`[Engine] Loaded ${symbols.length} symbols for monitoring`);

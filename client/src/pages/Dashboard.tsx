@@ -302,7 +302,7 @@ export default function Dashboard() {
                 </div>
                 <div className="pt-2 border-t border-[#1a2535] space-y-1">
                   <div className="flex items-center gap-2 text-[8px] text-[#4a6080]"><span className="w-1 h-1 bg-[#00e676] rounded-full" /> TRAILING STOP ATIVO</div>
-                  <div className="flex items-center gap-2 text-[8px] text-[#4a6080]"><span className="w-1 h-1 bg-[#00e676] rounded-full" /> BREAKEVEN AUTOMÁTICO</div>
+
                 </div>
               </div>
             </div>
