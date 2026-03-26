@@ -76,25 +76,9 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Price Row (Simulated) */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <div className="bg-[#0d1420] border border-[#1a2535] p-6 relative overflow-hidden group">
-            <div className="absolute top-0 left-0 w-1 h-full bg-[#00d4ff]"></div>
-            <p className="text-[9px] text-[#4a6080] uppercase tracking-[2px] mb-2">BTC / USDT</p>
-            <div className="flex items-baseline gap-3">
-              <h2 className="text-4xl font-bold tracking-[2px] text-[#c8d8f0]" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>$68,902.86</h2>
-              <span className="text-[11px] text-[#ff3d57] bg-[#ff3d57]/10 px-2 py-0.5 border border-[#ff3d57]/20 rounded">-3.85%</span>
-            </div>
-          </div>
-          <div className="bg-[#0d1420] border border-[#1a2535] p-6 relative overflow-hidden group">
-            <div className="absolute top-0 left-0 w-1 h-full bg-[#b388ff]"></div>
-            <p className="text-[9px] text-[#4a6080] uppercase tracking-[2px] mb-2">ETH / USDT</p>
-            <div className="flex items-baseline gap-3">
-              <h2 className="text-4xl font-bold tracking-[2px] text-[#c8d8f0]" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>$3,452.12</h2>
-              <span className="text-[11px] text-[#00e676] bg-[#00e676]/10 px-2 py-0.5 border border-[#00e676]/20 rounded">+1.24%</span>
-            </div>
-          </div>
-          <div className="bg-[#0d1420] border border-[#1a2535] p-6 relative overflow-hidden group">
+        {/* Capital Info Card */}
+        <div className="mb-8">
+          <div className="bg-[#0d1420] border border-[#1a2535] p-6 relative overflow-hidden group max-w-md">
             <div className="absolute top-0 left-0 w-1 h-full bg-[#ffd600]"></div>
             <p className="text-[9px] text-[#4a6080] uppercase tracking-[2px] mb-2">CAPITAL INICIAL</p>
             <div className="flex items-baseline gap-3">
